@@ -1,104 +1,274 @@
 <!doctype html>
-<html lang="en">
+<html lang="fa" dir="rtl">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{title}}</title>
-  <meta name="description" content="{{description}}">
-  <link rel="canonical" href="{{url}}">
-  <meta property="og:type" content="website">
-  <meta property="og:site_name" content="{{title}}">
-  <meta property="og:title" content="{{title}}">
-  <meta property="og:description" content="{{description}}">
-  <meta property="og:url" content="{{url}}">
-  <meta property="og:locale" content="en_US">
-  <meta name="twitter:card" content="summary">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>پوریا</title>
+<meta name="description" content="پوریا جهانبخش: با توسعهٔ نرم‌افزار روزگار می‌گذرانم و با فلسفیدن زندگی می‌کنم.">
+<link rel="canonical" href="{{url}}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{title}}">
+<meta property="og:title" content="پوریا">
+<meta property="og:description" content="با توسعهٔ نرم‌افزار روزگار می‌گذرانم و با فلسفیدن زندگی می‌کنم.">
+<meta property="og:url" content="{{url}}">
+<meta property="og:locale" content="fa_IR">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:image" content="{{home}}pouriya.png">
+<meta property="og:image:width" content="460">
+<meta property="og:image:height" content="460">
+<meta name="twitter:card" content="summary">
+<meta name="color-scheme" content="light dark">
+<link rel="preload" href="/fonts/Inconsolata-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face {
+  font-family: "Inconsolata";
+  src: url("/fonts/Inconsolata-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inconsolata";
+  src: url("/fonts/Inconsolata-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("/fonts/Vazirmatn-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("/fonts/Vazirmatn-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  --bg: #fbfaf7;
+  --fg: #1f1e1c;
+  --muted: #77736b;
+  --rule: #dcd8cf;
+  --accent: #a8461f;
+  --green: #0d8800;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151514;
+    --fg: #e6e3dc;
+    --muted: #8d897f;
+    --rule: #33322f;
+    --accent: #e8915f;
+    --green: #4ade80;
+  }
+}
+
+* { box-sizing: border-box; }
+html { background: var(--bg); color: var(--fg); }
+body {
+  margin: 0 auto;
+  max-width: 76ch;
+  padding: 2rem 1.25rem 2.5rem;
+  font: 17px/1.55 "Inconsolata", "Vazirmatn", ui-monospace, monospace;
+}
+a { color: inherit; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+a:hover { color: var(--accent); text-decoration-color: currentColor; }
+[hidden] { display: none !important; }
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 3rem;
+}
+.top b { font-weight: 700; }
+#language {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+#language:hover { color: var(--accent); }
+
+/* Me: the portrait beside the name and tagline. It is drawn on white, so
+   it is blended into the page, and inverted in dark mode. */
+.me { display: flex; align-items: center; gap: 2.5ch; }
+.portrait { width: 7rem; height: 7rem; flex: none; mix-blend-mode: multiply; }
+@media (prefers-color-scheme: dark) {
+  .portrait { filter: invert(1); mix-blend-mode: screen; }
+}
+h1 { margin: 0; font-size: inherit; font-weight: 700; }
+.tagline { margin: .35rem 0 0; color: var(--muted); }
+
+/* The pages: each line, name and what it holds, is one link. */
+.pages { display: grid; row-gap: .9rem; margin: 3.5rem 0 0; }
+.page {
+  display: grid;
+  grid-template-columns: 14ch 1fr;
+  column-gap: 2ch;
+  text-decoration: none;
+}
+.page b { font-weight: 700; }
+.page span { color: var(--muted); }
+.page:hover { color: inherit; }
+.page:hover b { color: var(--green); }
+.page:hover span { color: var(--fg); }
+
+@media (max-width: 560px) {
+  .top { margin-bottom: 3rem; }
+  .portrait { width: 5.5rem; height: 5.5rem; }
+  .page { grid-template-columns: 1fr; }
+}
+</style>
 </head>
 <body>
-  <button id="email-show" type="button">Show email</button>
-  <form id="email-form" hidden>
-    <img id="email-captcha" alt="Captcha">
-    <button id="email-refresh" type="button" aria-label="New captcha">↻</button>
-    <input id="email-answer" autocomplete="off" required>
-    <button type="submit">OK</button>
-  </form>
-  <a id="email" hidden></a>
 
-  <script>
-    // The handshake, once per page open: the server counts it as a visit and
-    // hands back this browser's device id. A browser driven by automation
-    // says so in navigator.webdriver, and sends nothing.
-    if (!navigator.webdriver) {
-      let device = null;
-      try {
-        device = localStorage.getItem("pouriya-www.device");
-      } catch (error) {}
-      fetch("/api/visit", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({device: device, path: location.pathname, referrer: document.referrer}),
-      }).then(function (response) {
-        return response.status === 200 ? response.json() : null;
-      }).then(function (body) {
-        if (body) {
-          try {
-            localStorage.setItem("pouriya-www.device", body.device);
-          } catch (error) {}
-        }
-      }).catch(function () {});
+<div class="top">
+  <b data-text="site">پوریا</b>
+  <button id="language" type="button" lang="en">English</button>
+</div>
+
+<div class="me">
+  <img class="portrait" src="/pouriya.png" alt="" width="460" height="460">
+  <div>
+    <h1 data-text="name">پوریا جهانبخش</h1>
+    <p class="tagline" data-text="tagline">با توسعهٔ نرم‌افزار روزگار می‌گذرانم و با فلسفیدن زندگی می‌کنم.</p>
+  </div>
+</div>
+
+<nav class="pages">
+  <a class="page" href="/software">
+    <b data-text="software">نرم‌افزار</b>
+    <span data-text="softwareAbout">مشارکت‌ها و پروژه‌های متن‌بازم (انگلیسی)</span>
+  </a>
+  <a class="page" data-language="en" href="/go?to=https://plogia.ir/?l=en" target="_blank" rel="noopener" hidden>
+    <b data-text="thoughts">گفته‌ها</b>
+    <span data-text="thoughtsAbout">یادداشت‌های کوتاهم در plogia.ir ↖</span>
+  </a>
+  <a class="page" data-language="fa" href="/go?to=https://plogia.ir/?l=fa" target="_blank" rel="noopener">
+    <b data-text="thoughts">گفته‌ها</b>
+    <span data-text="thoughtsAbout">یادداشت‌های کوتاهم در plogia.ir ↖</span>
+  </a>
+  <a class="page" href="/contact">
+    <b data-text="contact">ارتباط با من</b>
+    <span data-text="contactAbout">تلگرام، ایکس، ایمیل یا پیامی از همین‌جا</span>
+  </a>
+</nav>
+
+<script>
+  // Both languages live here; the page is Persian until the visitor picks
+  // English, which is remembered for every page. A link with ?l= wins.
+  const STRINGS = {
+    en: {
+      site: "pouriya",
+      toggle: "فارسی",
+      name: "Pouriya Jahanbakhsh",
+      tagline: "Developing software is how I make a living; doing philosophy is how I live.",
+      software: "Software",
+      softwareAbout: "Open-source work and things I wrote",
+      thoughts: "Thoughts",
+      thoughtsAbout: "Short posts, on plogia.ir ↗",
+      contact: "Contact",
+      contactAbout: "Telegram, X, email or a message",
+    },
+    fa: {
+      site: "پوریا",
+      toggle: "English",
+      name: "پوریا جهانبخش",
+      tagline: "با توسعهٔ نرم‌افزار روزگار می‌گذرانم و با فلسفیدن زندگی می‌کنم.",
+      software: "نرم‌افزار",
+      softwareAbout: "مشارکت‌ها و پروژه‌های متن‌بازم (انگلیسی)",
+      thoughts: "گفته‌ها",
+      thoughtsAbout: "یادداشت‌های کوتاهم در plogia.ir ↖",
+      contact: "ارتباط با من",
+      contactAbout: "تلگرام، ایکس، ایمیل یا پیامی از همین‌جا",
+    },
+  };
+  const LANGUAGE_KEY = "pouriya-www.language";
+  let language = "fa";
+  try {
+    if (localStorage.getItem(LANGUAGE_KEY) === "en") {
+      language = "en";
     }
+  } catch (error) {}
+  const linked = new URLSearchParams(location.search).get("l");
+  if (linked === "en" || linked === "fa") {
+    language = linked;
+  }
 
-    // The email is not in this page: it comes from /api/email for a solved
-    // captcha. A wrong answer costs the captcha, so a new one is fetched.
-    const show = document.getElementById("email-show");
-    const form = document.getElementById("email-form");
-    const picture = document.getElementById("email-captcha");
-    const answer = document.getElementById("email-answer");
-    const link = document.getElementById("email");
-    let captcha = null;
-
-    function newCaptcha() {
-      answer.value = "";
-      fetch("/api/captcha").then(function (response) {
-        if (response.status === 429) {
-          setTimeout(newCaptcha, 1000);
-          return null;
-        }
-        return response.status === 200 ? response.json() : null;
-      }).then(function (body) {
-        if (body) {
-          captcha = body.id;
-          picture.src = body.image;
-          answer.focus();
-        }
-      }).catch(function () {});
+  function applyLanguage() {
+    const words = STRINGS[language];
+    document.documentElement.lang = language;
+    document.documentElement.dir = language === "fa" ? "rtl" : "ltr";
+    document.title = words.site;
+    const toggle = document.getElementById("language");
+    toggle.textContent = words.toggle;
+    toggle.lang = language === "fa" ? "en" : "fa";
+    for (const element of document.querySelectorAll("[data-text]")) {
+      element.textContent = words[element.dataset.text];
     }
+    // plogia opens in the language this page is in: one link per language,
+    // both written out, since /go only takes a target a page links to.
+    for (const element of document.querySelectorAll("[data-language]")) {
+      element.hidden = element.dataset.language !== language;
+    }
+  }
 
-    show.addEventListener("click", function () {
-      show.hidden = true;
-      form.hidden = false;
-      newCaptcha();
-    });
-    document.getElementById("email-refresh").addEventListener("click", newCaptcha);
-    form.addEventListener("submit", function (event) {
-      event.preventDefault();
-      fetch("/api/email", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({captcha: captcha, answer: answer.value}),
-      }).then(function (response) {
-        return response.status === 200 ? response.json() : null;
-      }).then(function (body) {
-        if (body) {
-          form.hidden = true;
-          link.href = "mailto:" + body.email;
-          link.textContent = body.email;
-          link.hidden = false;
-        } else {
-          newCaptcha();
-        }
-      }).catch(function () {});
-    });
-  </script>
+  document.getElementById("language").addEventListener("click", function () {
+    language = language === "en" ? "fa" : "en";
+    try {
+      localStorage.setItem(LANGUAGE_KEY, language);
+    } catch (error) {}
+    applyLanguage();
+  });
+
+  // Every link to another site goes through /go, which records the click
+  // and sends the browser on. Our own pages are plain links: their visit,
+  // with its referrer, is the record. Tell it which page this
+  // is and, once known, the device.
+  function tag(device) {
+    for (const link of document.querySelectorAll('a[href^="/go?"]')) {
+      if (!link.dataset.go) {
+        link.dataset.go = link.getAttribute("href");
+      }
+      let href = link.dataset.go + "&from=" + encodeURIComponent(location.pathname);
+      if (device) {
+        href += "&device=" + encodeURIComponent(device);
+      }
+      link.setAttribute("href", href);
+    }
+  }
+
+  // The handshake, once per page open: the server counts it as a visit and
+  // hands back this browser's device id. A browser driven by automation says
+  // so in navigator.webdriver, and sends nothing.
+  let device = null;
+  try {
+    device = localStorage.getItem("pouriya-www.device");
+  } catch (error) {}
+  tag(device);
+  if (!navigator.webdriver) {
+    fetch("/api/visit", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({device: device, path: location.pathname, referrer: document.referrer}),
+    }).then(function (response) {
+      return response.status === 200 ? response.json() : null;
+    }).then(function (body) {
+      if (body) {
+        try {
+          localStorage.setItem("pouriya-www.device", body.device);
+        } catch (error) {}
+        tag(body.device);
+      }
+    }).catch(function () {});
+  }
+
+  applyLanguage();
+</script>
+
 </body>
 </html>

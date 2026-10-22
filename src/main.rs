@@ -1,10 +1,12 @@
 //! pouriya-www: the backend of pouriya.net.
 //!
-//! Serves the front end from `--www`, with `index.html` filled in from the
-//! settings below, and keeps who came in SQLite (`--db`): one row per device,
-//! one per page open, and a per-day counter of robots turned away. None of it
+//! Serves the front end from `--www`, with `index.html`, `software.html` and
+//! `contact.html` filled in from the settings below, and keeps who came in
+//! SQLite (`--db`): one row per device, one per page open, one per link
+//! followed to another site or handle copied, one per message sent from the
+//! contact page, and a per-day counter of robots turned away. None of it
 //! is shown on the site. The contact email is never written into the page; it
-//! is handed out only for a solved captcha.
+//! is handed out only for a solved captcha, and a message needs one too.
 
 use std::{
     collections::VecDeque,
@@ -19,8 +21,8 @@ use std::{
 use anyhow::{Context, bail};
 use axum::{
     Json, Router,
-    extract::{ConnectInfo, MatchedPath, Request, State},
-    http::{HeaderMap, HeaderValue, StatusCode, header},
+    extract::{ConnectInfo, MatchedPath, Query, Request, State},
+    http::{HeaderMap, HeaderValue, StatusCode, Uri, header},
     middleware::{self, Next},
     response::{Html, IntoResponse, Response},
     routing::{get, post},
@@ -50,9 +52,10 @@ const LINK_BLOG: &str = "https://plogia.ir";
 /// it: `POST /api/email` hands it out for a solved captcha only.
 const EMAIL: &str = "pouriya.jahanbakhsh@gmail.com";
 
-/// How hard the captcha is to read, and which of the crate's drawings.
-const CAPTCHA_DIFFICULTY: captcha::Difficulty = captcha::Difficulty::Easy;
-const CAPTCHA_NAME: captcha::CaptchaName = captcha::CaptchaName::Lucy;
+/// Characters in every captcha. The crate's presets pick 4 to 6 at random, so
+/// the picture is drawn here as its `Lucy` preset at `Medium` difficulty, with
+/// this many characters.
+const CAPTCHA_LENGTH: u32 = 5;
 
 /// How long a captcha may wait for its answer. It gets one try either way.
 const CAPTCHA_LIFETIME: Duration = Duration::from_secs(600);
@@ -64,6 +67,20 @@ const CAPTCHA_LIMIT: usize = 1000;
 /// Client addresses given a captcha in any one second; each may have one per
 /// second. The rest get a `429`.
 const CAPTCHA_ADDRESSES_PER_SECOND: usize = 100;
+
+/// The name on a message, in characters. Required.
+const MESSAGE_NAME_LIMIT: usize = 100;
+
+/// A message's text: at most this many words, characters and UTF-8 bytes,
+/// all three. Required.
+const MESSAGE_WORD_LIMIT: usize = 1000;
+const MESSAGE_CHARACTER_LIMIT: usize = 5000;
+const MESSAGE_BYTE_LIMIT: usize = 10000;
+
+/// The optional way to reply to a message's sender, in characters, and the
+/// kinds the front end may name it as.
+const MESSAGE_CONTACT_LIMIT: usize = 200;
+const MESSAGE_CONTACT_KINDS: [&str; 4] = ["phone", "telegram", "email", "other"];
 
 /// Longest header or client-sent string kept in a `visit` row, in characters.
 /// A User-Agent is rarely over 300; this only stops a hostile one filling the
@@ -100,19 +117,20 @@ const ROBOT_MARKERS: [&str; 22] = [
 
 /// Serve pouriya.net and count its visitors.
 ///
-/// Every page load reads `--www/index.html` from disk, so a change to the
+/// Every page load reads its HTML from `--www` on disk, so a change to the
 /// front end is live on the next load. Meant to sit behind a reverse proxy that
 /// terminates TLS; the client address is read from `Forwarded`,
 /// `X-Forwarded-For` or `X-Real-IP`, in that order.
 #[derive(Debug, Parser)]
 #[command(version, author)]
 struct CommandLine {
-    /// The front end: `index.html` and every file it links to, served as-is.
+    /// The front end: `index.html`, `software.html`, `contact.html` and every
+    /// file they link to, served as-is.
     #[arg(long, value_name = "DIRECTORY")]
     www: PathBuf,
 
-    /// SQLite database for devices, visits and robot counters. Created if
-    /// missing.
+    /// SQLite database for devices, visits, clicks, messages and robot
+    /// counters. Created if missing.
     #[arg(long, value_name = "FILE")]
     db: PathBuf,
 
@@ -242,11 +260,13 @@ async fn main() -> anyhow::Result<()> {
 
     // Checked once here so that a typo'd path fails at startup, naming the
     // flag, rather than as a 500 on the first visitor.
-    if !settings.www.join("index.html").is_file() {
-        bail!(
-            "--www {} has no index.html; it must be the front-end directory",
-            settings.www.display()
-        );
+    for file in ["index.html", "software.html", "contact.html"] {
+        if !settings.www.join(file).is_file() {
+            bail!(
+                "--www {} has no {file}; it must be the front-end directory",
+                settings.www.display()
+            );
+        }
     }
     let url = settings.url.trim_end_matches('/').to_string();
     match url.split_once("://") {
@@ -285,9 +305,40 @@ async fn main() -> anyhow::Result<()> {
              );
              CREATE INDEX IF NOT EXISTS visit_device ON visit (device, at);
 
+             -- One row per link to another site followed through GET /go
+             -- (our own pages are plain links: their visit is the record), and
+             -- per handle or email
+             -- copied or email link opened, from POST /api/click: what, from
+             -- which page, the device when the page knew it and the database
+             -- does too, and `action`, `open` or `copy`.
+             CREATE TABLE IF NOT EXISTS click (
+                 id INTEGER PRIMARY KEY,
+                 at INTEGER NOT NULL,
+                 ip TEXT NOT NULL,
+                 link TEXT NOT NULL,
+                 page TEXT NOT NULL,
+                 device BLOB REFERENCES device (id),
+                 action TEXT NOT NULL
+             );
+
+             -- One row per message sent from the contact page with a solved
+             -- captcha. `language` is the page's, `en` or `fa`, to reply in.
+             -- `contact_kind` is empty when no way to reply was given.
+             CREATE TABLE IF NOT EXISTS message (
+                 id INTEGER PRIMARY KEY,
+                 at INTEGER NOT NULL,
+                 ip TEXT NOT NULL,
+                 device BLOB REFERENCES device (id),
+                 language TEXT NOT NULL,
+                 name TEXT NOT NULL,
+                 text TEXT NOT NULL,
+                 contact_kind TEXT NOT NULL,
+                 contact TEXT NOT NULL
+             );
+
              -- Requests refused as robots, counted per UTC day and per kind:
-             -- `page`, `visit`, `captcha` or `email`. Nothing else about them
-             -- is kept.
+             -- `page`, `visit`, `click`, `captcha`, `email` or `message`.
+             -- Nothing else about them is kept.
              CREATE TABLE IF NOT EXISTS robot (
                  day TEXT NOT NULL,
                  kind TEXT NOT NULL,
@@ -306,11 +357,39 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let router = Router::new()
-        .route("/", get(page))
-        .route("/index.html", get(page))
+        .route(
+            "/",
+            get(|State(app): State<Arc<App>>, headers: HeaderMap| {
+                page(app, headers, "index.html", "/")
+            }),
+        )
+        .route(
+            "/index.html",
+            get(|State(app): State<Arc<App>>, headers: HeaderMap| {
+                page(app, headers, "index.html", "/")
+            }),
+        )
+        .route(
+            "/software",
+            get(|State(app): State<Arc<App>>, headers: HeaderMap| {
+                page(app, headers, "software.html", "/software")
+            }),
+        )
+        .route(
+            "/contact",
+            get(|State(app): State<Arc<App>>, headers: HeaderMap| {
+                page(app, headers, "contact.html", "/contact")
+            }),
+        )
+        // Served filled in at their own paths only, never raw by the fallback.
+        .route("/software.html", get(|| async { StatusCode::NOT_FOUND }))
+        .route("/contact.html", get(|| async { StatusCode::NOT_FOUND }))
+        .route("/go", get(go))
         .route("/api/visit", post(visit))
         .route("/api/captcha", get(captcha))
         .route("/api/email", post(email))
+        .route("/api/message", post(message))
+        .route("/api/click", post(click))
         .fallback_service(ServeDir::new(&settings.www))
         // Revalidate everything: ServeDir answers with Last-Modified, so an
         // unchanged file costs a 304, and a changed one shows up on the next
@@ -360,25 +439,34 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// `GET /` and `/index.html`: `index.html` with its `{{name}}` fields filled
-/// from the settings at the top of this file. Robots are counted and still
-/// served, so link previews work.
-async fn page(State(app): State<Arc<App>>, headers: HeaderMap) -> Response {
+/// `GET /` and `/index.html` (`index.html`), `GET /software`
+/// (`software.html`): the page's `file` with its `{{name}}` fields filled from
+/// the settings at the top of this file; `{{url}}` is `--url` then `path`,
+/// `{{home}}` is `--url` then `/` on every page.
+/// Robots are counted and still served, so link previews work.
+async fn page(
+    app: Arc<App>,
+    headers: HeaderMap,
+    file: &'static str,
+    path: &'static str,
+) -> Response {
     robot(&app, &headers, "page").await;
 
-    let template = match tokio::fs::read_to_string(app.www.join("index.html")).await {
+    let template = match tokio::fs::read_to_string(app.www.join(file)).await {
         Ok(template) => template,
         Err(error) => {
-            tracing::error!(msg = "Could not read index.html", www = ?app.www, error = %error);
+            tracing::error!(msg = "Could not read page", file = file, www = ?app.www, error = %error);
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
 
-    let url = format!("{}/", app.url);
+    let url = format!("{}{path}", app.url);
+    let home = format!("{}/", app.url);
     let values = [
         ("title", SITE_TITLE),
         ("description", SITE_DESCRIPTION),
         ("url", url.as_str()),
+        ("home", home.as_str()),
         ("github", LINK_GITHUB),
         ("telegram", LINK_TELEGRAM),
         ("blog", LINK_BLOG),
@@ -532,6 +620,188 @@ async fn visit(
     }
 }
 
+#[derive(Deserialize)]
+struct GoRequest {
+    /// Where the link points.
+    to: String,
+    /// `location.pathname` of the page the link was on, added by its script.
+    from: Option<String>,
+    /// The browser's device id, added by the page's script once it has one.
+    device: Option<String>,
+}
+
+/// `GET /go?to=URL`: every link to another site goes through here, so
+/// following one is recorded even though the page it was on is gone. Links
+/// to our own pages do not: the visit they lead to, with its referrer, is the
+/// record. The browser is sent on with a `303`. Only a `to` that some `--www` page links
+/// to as `href="/go?to=…"` is allowed, so this is no open redirect for anyone
+/// else's links; any other is a `404`. Robots are sent on too, but counted
+/// rather than recorded.
+async fn go(
+    State(app): State<Arc<App>>,
+    ConnectInfo(socket): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Query(request): Query<GoRequest>,
+) -> Response {
+    let allowed = match linked(&app, &request.to).await {
+        Ok(allowed) => allowed,
+        Err(error) => {
+            tracing::error!(msg = "Could not read the front end", www = ?app.www, error = %format!("{error:#}"));
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    if !allowed {
+        tracing::warn!(msg = "Refused a link no page has", to = %request.to);
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let location = match HeaderValue::from_str(&request.to) {
+        Ok(location) => location,
+        Err(error) => {
+            tracing::error!(msg = "A page links to an unusable URL", to = %request.to, error = %error);
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    let onward = (StatusCode::SEE_OTHER, [(header::LOCATION, location)]);
+
+    if robot(&app, &headers, "click").await {
+        return onward.into_response();
+    }
+    let ip = client_ip(&headers, socket);
+    let page = match &request.from {
+        Some(from) => clip(from),
+        None => String::new(),
+    };
+    let claimed = match &request.device {
+        Some(text) => Ulid::parse(text),
+        None => None,
+    };
+    let link = request.to;
+    let recorded = database(&app, move |connection| {
+        let device = known_device(connection, claimed)?;
+        connection.execute(
+            "INSERT INTO click (at, ip, link, page, device, action) VALUES (?1, ?2, ?3, ?4, ?5, 'open')",
+            params![now(), ip.to_string(), link, page, device],
+        )
+    })
+    .await;
+    // The visitor is sent on either way: a lost row is ours to worry about.
+    if let Err(error) = recorded {
+        tracing::error!(msg = "Could not record click", error = %format!("{error:#}"));
+    }
+    onward.into_response()
+}
+
+#[derive(Deserialize)]
+struct ClickRequest {
+    /// What was opened or copied: a `/go` target some page has, or
+    /// `mailto:` and `EMAIL`.
+    link: String,
+    /// `open` or `copy`.
+    action: String,
+    /// `location.pathname` of the page it happened on.
+    page: String,
+    /// The browser's device id, when the page has one.
+    device: Option<String>,
+}
+
+/// `POST /api/click`, sent by beacon: what a followed `/go` link cannot
+/// record. A handle or the email copied from a page (`copy`), and the email's
+/// `mailto:` link opened, which never reaches this server (`open`). The link
+/// must be one `/go` would take, or the email; anything else is a `404`, so
+/// nobody can write junk. `204` either way for robots, who are only counted.
+async fn click(
+    State(app): State<Arc<App>>,
+    ConnectInfo(socket): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Json(body): Json<ClickRequest>,
+) -> Response {
+    let action = match body.action.as_str() {
+        "open" => "open",
+        "copy" => "copy",
+        _ => return StatusCode::BAD_REQUEST.into_response(),
+    };
+    let allowed = if body.link == format!("mailto:{EMAIL}") {
+        true
+    } else {
+        match linked(&app, &body.link).await {
+            Ok(allowed) => allowed,
+            Err(error) => {
+                tracing::error!(msg = "Could not read the front end", www = ?app.www, error = %format!("{error:#}"));
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        }
+    };
+    if !allowed {
+        tracing::warn!(msg = "Refused a link no page has", to = %body.link);
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    if robot(&app, &headers, "click").await {
+        return StatusCode::NO_CONTENT.into_response();
+    }
+    let ip = client_ip(&headers, socket);
+    let page = clip(&body.page);
+    let claimed = match &body.device {
+        Some(text) => Ulid::parse(text),
+        None => None,
+    };
+    let link = body.link;
+    let recorded = database(&app, move |connection| {
+        let device = known_device(connection, claimed)?;
+        connection.execute(
+            "INSERT INTO click (at, ip, link, page, device, action) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![now(), ip.to_string(), link, page, device, action],
+        )
+    })
+    .await;
+    match recorded {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(error) => {
+            tracing::error!(msg = "Could not record click", error = %format!("{error:#}"));
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+/// Whether some `--www` page links to `target` as `href="/go?to=…"`. The pages
+/// are the only list of allowed targets: every one is read, as a page load
+/// does, so a link added to the HTML works on the next click.
+async fn linked(app: &App, target: &str) -> anyhow::Result<bool> {
+    let mut entries = tokio::fs::read_dir(&app.www)
+        .await
+        .context("Could not list the front end")?;
+    while let Some(entry) = entries
+        .next_entry()
+        .await
+        .context("Could not list the front end")?
+    {
+        let file = entry.path();
+        match file.extension() {
+            Some(extension) if extension == "html" => {}
+            _ => continue,
+        }
+        let html = tokio::fs::read_to_string(&file)
+            .await
+            .with_context(|| format!("Could not read {}", file.display()))?;
+        let mut rest = html.as_str();
+        while let Some(start) = rest.find("href=\"/go?") {
+            let after = &rest[start + "href=\"".len()..];
+            let Some(end) = after.find('"') else {
+                break;
+            };
+            // Parsed the way a request to /go is, so an encoded and a plain
+            // spelling of one URL match.
+            if let Ok(uri) = after[..end].replace("&amp;", "&").parse::<Uri>()
+                && let Ok(Query(link)) = Query::<GoRequest>::try_from_uri(&uri)
+                && link.to == target
+            {
+                return Ok(true);
+            }
+            rest = &after[end..];
+        }
+    }
+    Ok(false)
+}
+
 #[derive(Serialize)]
 struct CaptchaResponse {
     /// What `POST /api/email` names this captcha by.
@@ -578,7 +848,11 @@ async fn captcha(
     }
 
     let made = tokio::task::spawn_blocking(|| {
-        let made = captcha::by_name(CAPTCHA_DIFFICULTY, CAPTCHA_NAME);
+        let mut made = captcha::Captcha::new();
+        made.add_chars(CAPTCHA_LENGTH)
+            .apply_filter(captcha::filters::Noise::new(0.4))
+            .apply_filter(captcha::filters::Grid::new(6, 6))
+            .view(220, 120);
         (made.chars_as_string(), made.as_base64())
     })
     .await;
@@ -634,8 +908,9 @@ struct EmailResponse {
 }
 
 #[derive(Serialize)]
-struct EmailError {
-    /// `captcha`: wrong, expired or already tried.
+struct FieldError {
+    /// Which field to fix: `captcha` (wrong, expired or already tried), or for
+    /// a message `name`, `text` or `contact`.
     error: &'static str,
 }
 
@@ -650,36 +925,163 @@ async fn email(
     if robot(&app, &headers, "email").await {
         return StatusCode::NO_CONTENT.into_response();
     }
-    let mut solved = false;
-    {
-        let mut captchas = match app.captchas.lock() {
-            Ok(captchas) => captchas,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        let checked = Instant::now();
-        captchas.retain(|(_, _, at)| checked.duration_since(*at) < CAPTCHA_LIFETIME);
-        let mut found = None;
-        for (index, (id, _, _)) in captchas.iter().enumerate() {
-            if *id == body.captcha {
-                found = Some(index);
-            }
-        }
-        // One try: right or wrong, it is gone.
-        if let Some(index) = found
-            && let Some((_, answer, _)) = captchas.remove(index)
-        {
-            solved = answer.eq_ignore_ascii_case(body.answer.trim());
-        }
-    }
-    if !solved {
+    if !solved(&app, &body.captcha, &body.answer) {
         return (
             StatusCode::BAD_REQUEST,
-            Json(EmailError { error: "captcha" }),
+            Json(FieldError { error: "captcha" }),
         )
             .into_response();
     }
     tracing::info!(msg = "Gave out the email", ip = %client_ip(&headers, socket));
     Json(EmailResponse { email: EMAIL }).into_response()
+}
+
+#[derive(Deserialize)]
+struct MessageRequest {
+    /// The sender's name.
+    name: String,
+    /// What they wrote.
+    text: String,
+    /// One of `MESSAGE_CONTACT_KINDS`, naming what `contact` is.
+    contact_kind: String,
+    /// How to reply to them; empty when they gave nothing.
+    contact: String,
+    /// `en` or `fa`: the language the page was in.
+    language: String,
+    /// The browser's device id, when the page has one.
+    device: Option<String>,
+    /// The id from `GET /api/captcha`.
+    captcha: String,
+    /// What the visitor read in its picture.
+    answer: String,
+}
+
+/// `POST /api/message`: a message from the contact page, kept for the author
+/// to read. `204` when stored; `400 {error}` naming the field to fix. The
+/// fields are checked before the captcha, which a typo should not cost; a
+/// wrong answer costs the captcha, and the front end asks for a new one.
+async fn message(
+    State(app): State<Arc<App>>,
+    ConnectInfo(socket): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Json(body): Json<MessageRequest>,
+) -> Response {
+    if robot(&app, &headers, "message").await {
+        return StatusCode::NO_CONTENT.into_response();
+    }
+    let refuse = |field: &'static str| {
+        (StatusCode::BAD_REQUEST, Json(FieldError { error: field })).into_response()
+    };
+
+    let name = body.name.trim().to_string();
+    if name.is_empty() || name.chars().count() > MESSAGE_NAME_LIMIT {
+        return refuse("name");
+    }
+    let text = body.text.trim().to_string();
+    if text.is_empty()
+        || text.len() > MESSAGE_BYTE_LIMIT
+        || text.chars().count() > MESSAGE_CHARACTER_LIMIT
+        || text.split_whitespace().count() > MESSAGE_WORD_LIMIT
+    {
+        return refuse("text");
+    }
+    let contact = body.contact.trim().to_string();
+    let mut contact_kind = String::new();
+    if !contact.is_empty() {
+        for kind in MESSAGE_CONTACT_KINDS {
+            if kind == body.contact_kind {
+                contact_kind = kind.to_string();
+            }
+        }
+        if contact_kind.is_empty() || contact.chars().count() > MESSAGE_CONTACT_LIMIT {
+            return refuse("contact");
+        }
+    }
+    let language = match body.language.as_str() {
+        "fa" => "fa",
+        _ => "en",
+    };
+    if !solved(&app, &body.captcha, &body.answer) {
+        return refuse("captcha");
+    }
+
+    let ip = client_ip(&headers, socket);
+    let claimed = match &body.device {
+        Some(text) => Ulid::parse(text),
+        None => None,
+    };
+    let stored = database(&app, move |connection| {
+        let device = known_device(connection, claimed)?;
+        connection.execute(
+            "INSERT INTO message (at, ip, device, language, name, text, contact_kind, contact)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                now(),
+                ip.to_string(),
+                device,
+                language,
+                name,
+                text,
+                contact_kind,
+                contact
+            ],
+        )
+    })
+    .await;
+    match stored {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(error) => {
+            tracing::error!(msg = "Could not store message", error = %format!("{error:#}"));
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+/// The bytes of `claimed` when the database knows that device, for a row that
+/// names it. A forged or forgotten id gives `None` rather than an error: the
+/// click or message is no less worth keeping.
+fn known_device(
+    connection: &Connection,
+    claimed: Option<Ulid>,
+) -> rusqlite::Result<Option<Vec<u8>>> {
+    let Some(claimed) = claimed else {
+        return Ok(None);
+    };
+    let known: Option<i64> = connection
+        .query_row(
+            "SELECT 1 FROM device WHERE id = ?1",
+            [&claimed.0[..]],
+            |row| row.get(0),
+        )
+        .optional()?;
+    match known {
+        Some(_) => Ok(Some(claimed.0.to_vec())),
+        None => Ok(None),
+    }
+}
+
+/// Whether `answer` is what captcha `id` showed. One try: right or wrong, the
+/// captcha is gone afterwards. Unknown and expired ids are never solved.
+fn solved(app: &App, id: &str, answer: &str) -> bool {
+    let mut captchas = match app.captchas.lock() {
+        Ok(captchas) => captchas,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    let checked = Instant::now();
+    captchas.retain(|(_, _, at)| checked.duration_since(*at) < CAPTCHA_LIFETIME);
+    let mut found = None;
+    for (index, (shown, _, _)) in captchas.iter().enumerate() {
+        if shown == id {
+            found = Some(index);
+        }
+    }
+    match found {
+        Some(index) => match captchas.remove(index) {
+            Some((_, expected, _)) => expected.eq_ignore_ascii_case(answer.trim()),
+            None => false,
+        },
+        None => false,
+    }
 }
 
 /// One line per request, at a level that follows the status: 2xx and 3xx

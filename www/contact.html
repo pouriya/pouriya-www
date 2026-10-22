@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>پوریا · ارتباط با من</title>
+<meta name="description" content="ارتباط با پوریا جهانبخش: تلگرام، ایکس، ایمیل یا پیامی از همین‌جا.">
+<link rel="canonical" href="{{url}}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{title}}">
+<meta property="og:title" content="پوریا · ارتباط با من">
+<meta property="og:description" content="تلگرام، ایکس، ایمیل یا پیامی از همین‌جا.">
+<meta property="og:url" content="{{url}}">
+<meta property="og:locale" content="fa_IR">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:image" content="{{home}}pouriya.png">
+<meta property="og:image:width" content="460">
+<meta property="og:image:height" content="460">
+<meta name="twitter:card" content="summary">
+<meta name="color-scheme" content="light dark">
+<link rel="preload" href="/fonts/Inconsolata-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face {
+  font-family: "Inconsolata";
+  src: url("/fonts/Inconsolata-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inconsolata";
+  src: url("/fonts/Inconsolata-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("/fonts/Vazirmatn-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("/fonts/Vazirmatn-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  --bg: #fbfaf7;
+  --fg: #1f1e1c;
+  --muted: #77736b;
+  --rule: #dcd8cf;
+  --accent: #a8461f;
+  --green: #0d8800;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151514;
+    --fg: #e6e3dc;
+    --muted: #8d897f;
+    --rule: #33322f;
+    --accent: #e8915f;
+    --green: #4ade80;
+  }
+}
+
+* { box-sizing: border-box; }
+html { background: var(--bg); color: var(--fg); }
+body {
+  margin: 0 auto;
+  max-width: 76ch;
+  padding: 2rem 1.25rem 2.5rem;
+  font: 17px/1.55 "Inconsolata", "Vazirmatn", ui-monospace, monospace;
+}
+a { color: inherit; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+a:hover { color: var(--accent); text-decoration-color: currentColor; }
+[hidden] { display: none !important; }
+.ltr { direction: ltr; unicode-bidi: isolate; }
+
+/* Text that acts: underlined like a link, never a filled box. */
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.link:hover { color: var(--accent); text-decoration-color: currentColor; }
+.quiet { color: var(--muted); text-decoration: none; }
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 1.5rem;
+}
+h1, h2 { margin: 0; font-size: inherit; font-weight: 700; }
+h2 { margin: 2.5rem 0 1.25rem; }
+
+/* The ways to reach me: one row, a logo before each. */
+.ways {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: .75rem 3ch;
+}
+.way {
+  display: inline-flex;
+  align-items: center;
+  gap: 1ch;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.way svg { width: 20px; height: 20px; flex: none; }
+.way, .way span { line-height: 1.5rem; }
+.way span { text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+.way:hover { color: var(--accent); }
+.way:hover span { text-decoration-color: currentColor; }
+/* Two handles under one logo: each line is its own link. */
+.way.stack { cursor: default; }
+.way.stack:hover { color: inherit; }
+.way.stack:hover span { text-decoration-color: var(--rule); }
+.handles { display: flex; flex-direction: column; align-items: flex-start; direction: ltr; }
+.handles a { color: inherit; text-decoration: none; }
+.handles a:hover { color: var(--accent); }
+.handles a:hover span { text-decoration-color: currentColor; }
+
+/* Fields: a thin frame, the page's own background, one height for all. */
+.field { margin-bottom: 1.25rem; }
+.field > label, .field > .label { display: block; color: var(--muted); margin-bottom: .4rem; }
+.field > .label small { font-size: inherit; opacity: .7; }
+input[type="text"], textarea {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: .45rem 1ch;
+  border: 1px solid var(--rule);
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+}
+input[type="text"]:focus, textarea:focus { outline: none; border-color: var(--fg); }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: .6; }
+textarea { min-height: 8rem; resize: vertical; }
+.count { margin-top: .35rem; color: var(--muted); text-align: end; }
+
+/* Reply-to kinds as words: the chosen one is plain text, the rest muted. */
+.kinds { display: flex; flex-wrap: wrap; gap: .25rem 2ch; margin-bottom: .6rem; }
+.kinds input { position: absolute; opacity: 0; pointer-events: none; }
+.kinds label { color: var(--muted); cursor: pointer; }
+.kinds label:hover { color: var(--accent); }
+.kinds input:checked + label { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; }
+.kinds input:focus-visible + label { outline: 1px solid var(--fg); outline-offset: 2px; }
+
+button.primary, button.secondary {
+  padding: .45rem 2.5ch;
+  border: 1px solid var(--fg);
+  border-radius: 0;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+button.primary { background: var(--fg); color: var(--bg); }
+button.primary:hover { background: var(--green); border-color: var(--green); }
+button.secondary { background: transparent; color: var(--fg); font-weight: 400; }
+button.secondary:hover { color: var(--accent); border-color: var(--accent); }
+button:disabled { opacity: .4; cursor: default; }
+button.wide { display: block; width: 100%; }
+
+.error { margin: .4rem 0 0; color: var(--accent); }
+.sent { color: var(--green); margin: 0; }
+
+/* The captcha window, shared by the email and the message. */
+dialog {
+  width: min(92vw, 25rem);
+  padding: 1.5rem;
+  border: 1px solid var(--fg);
+  background: var(--bg);
+  color: var(--fg);
+}
+dialog::backdrop { background: rgb(0 0 0 / .45); }
+dialog p.label { margin: 0 0 1rem; color: var(--muted); }
+.challenge { display: grid; grid-template-columns: auto 1fr; align-items: center; margin-bottom: 1rem; }
+/* Black on white from the server: blended into the window, either way. */
+.picture { display: block; width: 220px; height: 120px; mix-blend-mode: multiply; }
+@media (prefers-color-scheme: dark) {
+  .picture { filter: invert(1); mix-blend-mode: screen; }
+}
+.refresh {
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: none;
+  color: var(--fg);
+  cursor: pointer;
+}
+.refresh svg { width: 1.5rem; height: 1.5rem; }
+.refresh:hover { color: var(--accent); border-color: var(--accent); }
+#captcha-answer { letter-spacing: .2em; text-align: center; }
+.actions { display: flex; justify-content: space-between; gap: 2ch; margin-top: 1.25rem; }
+
+@media (max-width: 560px) {
+  body { padding-top: 2rem; }
+  .ways { flex-direction: column; align-items: flex-start; }
+}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1 data-text="contact">ارتباط با من</h1>
+  <button id="language" class="link quiet" type="button" lang="en">English</button>
+</div>
+
+<div class="ways">
+  <a class="way" data-link="https://t.me/pouriya_net" href="/go?to=https://t.me/pouriya_net" target="_blank" rel="noopener">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+    <span class="ltr">@pouriya_net</span>
+  </a>
+  <div class="way stack">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+    <div class="handles">
+      <a data-link="https://x.com/mr_pouriya" href="/go?to=https://x.com/mr_pouriya" target="_blank" rel="noopener"><span class="ltr">@mr_pouriya</span></a>
+      <a data-link="https://x.com/pouriya_net" href="/go?to=https://x.com/pouriya_net" target="_blank" rel="noopener"><span class="ltr">@pouriya_net</span></a>
+    </div>
+  </div>
+  <button class="way" type="button" id="email-show">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M3 5.5h18v13H3z M3 6l9 7 9-7"/></svg>
+    <span data-text="show">نمایش ایمیل</span>
+  </button>
+  <a class="way" id="email" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M3 5.5h18v13H3z M3 6l9 7 9-7"/></svg>
+    <span class="ltr"></span>
+  </a>
+</div>
+
+<h2 data-text="message">ارسال پیام</h2>
+
+<form id="message-form" novalidate>
+  <div class="field">
+    <label for="message-name" data-text="name">نام</label>
+    <input id="message-name" type="text" dir="auto" autocomplete="name" maxlength="100">
+    <p class="error" id="message-name-error" hidden></p>
+  </div>
+
+  <div class="field">
+    <label for="message-text" data-text="text">پیام</label>
+    <textarea id="message-text" dir="auto"></textarea>
+    <div class="count" id="message-count"></div>
+    <p class="error" id="message-text-error" hidden></p>
+  </div>
+
+  <div class="field">
+    <div class="label"><span data-text="reply">راه پاسخ</span> <small>· <span data-text="optional">اختیاری</span></small></div>
+    <div class="kinds" role="radiogroup">
+      <input type="radio" name="kind" id="kind-phone" value="phone" checked><label for="kind-phone" data-text="phone">تلفن</label>
+      <input type="radio" name="kind" id="kind-telegram" value="telegram"><label for="kind-telegram" data-text="telegram">تلگرام</label>
+      <input type="radio" name="kind" id="kind-email" value="email"><label for="kind-email" data-text="email">ایمیل</label>
+      <input type="radio" name="kind" id="kind-other" value="other"><label for="kind-other" data-text="other">سایر</label>
+    </div>
+    <input id="message-contact" type="text" dir="auto" maxlength="200">
+    <p class="error" id="message-contact-error" hidden></p>
+  </div>
+
+  <button class="primary wide" type="submit" data-text="send">ارسال</button>
+</form>
+<p class="sent" id="message-sent" data-text="sent" hidden>پیام شما ارسال شد.</p>
+
+<dialog id="captcha">
+  <form method="dialog" id="captcha-form" novalidate>
+    <p class="label" data-text="captcha">حروف داخل تصویر را بنویسید</p>
+    <div class="challenge">
+      <img id="captcha-picture" class="picture" alt="" width="220" height="120">
+      <button class="refresh" type="button" id="captcha-refresh" data-label="refresh" aria-label="تصویر جدید">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg>
+      </button>
+    </div>
+    <input id="captcha-answer" type="text" class="ltr" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="5">
+    <p class="error" id="captcha-error" hidden></p>
+    <div class="actions">
+      <button class="secondary" type="button" id="captcha-cancel" data-text="cancel">انصراف</button>
+      <button class="primary" type="submit" id="captcha-confirm" data-text="confirm">تأیید</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  // Both languages live here; the page is Persian until the visitor picks
+  // English, which is remembered. A link with ?l=fa or ?l=en wins.
+  const STRINGS = {
+    en: {
+      site: "pouriya",
+      page: "contact",
+      toggle: "فارسی",
+      contact: "Contact",
+      telegram: "Telegram",
+      email: "Email",
+      show: "Show email",
+      refresh: "New picture",
+      cancel: "Cancel",
+      confirm: "Confirm",
+      message: "Send a message",
+      name: "Name",
+      text: "Message",
+      reply: "Reply to",
+      optional: "optional",
+      phone: "Phone",
+      other: "Other",
+      captcha: "Type the characters in the picture",
+      send: "Send",
+      sent: "Your message was sent.",
+      where: {phone: "+98 912 345 6789", telegram: "@username", email: "you@example.com", other: "Anything I can reply to"},
+      count: function (words) { return words + " / 1000 words"; },
+      errors: {
+        name: "Write your name, up to 100 characters.",
+        empty: "Write a message.",
+        long: "Too long: up to 1000 words and 5000 characters.",
+        contact: "Up to 200 characters.",
+        captcha: "Wrong characters. Try this new picture.",
+        failed: "Could not send. Try again.",
+      },
+    },
+    fa: {
+      site: "پوریا",
+      page: "ارتباط با من",
+      toggle: "English",
+      contact: "ارتباط با من",
+      telegram: "تلگرام",
+      email: "ایمیل",
+      show: "نمایش ایمیل",
+      refresh: "تصویر جدید",
+      cancel: "انصراف",
+      confirm: "تأیید",
+      message: "ارسال پیام",
+      name: "نام",
+      text: "پیام",
+      reply: "راه پاسخ",
+      optional: "اختیاری",
+      phone: "تلفن",
+      other: "سایر",
+      captcha: "حروف داخل تصویر را بنویسید",
+      send: "ارسال",
+      sent: "پیام شما ارسال شد.",
+      where: {phone: "۰۹۱۲ ۳۴۵ ۶۷۸۹", telegram: "@username", email: "you@example.com", other: "هر راهی برای پاسخ"},
+      count: function (words) { return words.toLocaleString("fa-IR") + " از ۱۰۰۰ کلمه"; },
+      errors: {
+        name: "نام خود را بنویسید، حداکثر ۱۰۰ نویسه.",
+        empty: "پیامی بنویسید.",
+        long: "پیام طولانی است: حداکثر ۱۰۰۰ کلمه و ۵۰۰۰ نویسه.",
+        contact: "حداکثر ۲۰۰ نویسه.",
+        captcha: "حروف درست نبود. این تصویر جدید را امتحان کنید.",
+        failed: "ارسال نشد. دوباره امتحان کنید.",
+      },
+    },
+  };
+  const LANGUAGE_KEY = "pouriya-www.language";
+  let language = "fa";
+  try {
+    if (localStorage.getItem(LANGUAGE_KEY) === "en") {
+      language = "en";
+    }
+  } catch (error) {}
+  const linked = new URLSearchParams(location.search).get("l");
+  if (linked === "en" || linked === "fa") {
+    language = linked;
+  }
+
+  // Errors are kept by key, so switching language rewrites them too.
+  const shownErrors = {};
+  function showError(id, key) {
+    const element = document.getElementById(id);
+    if (key) {
+      shownErrors[id] = key;
+      element.textContent = STRINGS[language].errors[key];
+      element.hidden = false;
+    } else {
+      delete shownErrors[id];
+      element.hidden = true;
+    }
+  }
+
+  function kind() {
+    return document.querySelector('input[name="kind"]:checked').value;
+  }
+
+  function applyLanguage() {
+    const words = STRINGS[language];
+    document.documentElement.lang = language;
+    document.documentElement.dir = language === "fa" ? "rtl" : "ltr";
+    document.title = words.site + " · " + words.page;
+    const toggle = document.getElementById("language");
+    toggle.textContent = words.toggle;
+    toggle.lang = language === "fa" ? "en" : "fa";
+    for (const element of document.querySelectorAll("[data-text]")) {
+      element.textContent = words[element.dataset.text];
+    }
+    for (const element of document.querySelectorAll("[data-label]")) {
+      element.setAttribute("aria-label", words[element.dataset.label]);
+    }
+    document.getElementById("message-contact").placeholder = words.where[kind()];
+    for (const id in shownErrors) {
+      showError(id, shownErrors[id]);
+    }
+    count();
+  }
+
+  document.getElementById("language").addEventListener("click", function () {
+    language = language === "en" ? "fa" : "en";
+    try {
+      localStorage.setItem(LANGUAGE_KEY, language);
+    } catch (error) {}
+    applyLanguage();
+  });
+
+  // Every link to another site goes through /go, which records the click
+  // and sends the browser on. Our own pages are plain links: their visit,
+  // with its referrer, is the record. Tell it which page this
+  // is and, once known, the device.
+  function tag(device) {
+    for (const link of document.querySelectorAll('a[href^="/go?"]')) {
+      if (!link.dataset.go) {
+        link.dataset.go = link.getAttribute("href");
+      }
+      let href = link.dataset.go + "&from=" + encodeURIComponent(location.pathname);
+      if (device) {
+        href += "&device=" + encodeURIComponent(device);
+      }
+      link.setAttribute("href", href);
+    }
+  }
+
+  // The handshake, once per page open: the server counts it as a visit and
+  // hands back this browser's device id. A browser driven by automation says
+  // so in navigator.webdriver, and sends nothing.
+  let device = null;
+  try {
+    device = localStorage.getItem("pouriya-www.device");
+  } catch (error) {}
+  tag(device);
+  if (!navigator.webdriver) {
+    fetch("/api/visit", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({device: device, path: location.pathname, referrer: document.referrer}),
+    }).then(function (response) {
+      return response.status === 200 ? response.json() : null;
+    }).then(function (body) {
+      if (body) {
+        device = body.device;
+        try {
+          localStorage.setItem("pouriya-www.device", body.device);
+        } catch (error) {}
+        tag(body.device);
+      }
+    }).catch(function () {});
+  }
+
+  // What /go cannot see: a handle or the email copied off this page, and the
+  // email's mailto: link opened. Sent by beacon, which survives the page
+  // being left or the mail app taking over.
+  function record(link, action) {
+    if (navigator.webdriver) {
+      return;
+    }
+    const body = JSON.stringify({link: link, action: action, page: location.pathname, device: device});
+    navigator.sendBeacon("/api/click", new Blob([body], {type: "application/json"}));
+  }
+  document.addEventListener("copy", function () {
+    const selection = document.getSelection();
+    if (!selection || selection.isCollapsed) {
+      return;
+    }
+    for (const way of document.querySelectorAll("[data-link]")) {
+      if (!way.hidden && selection.containsNode(way, true)) {
+        record(way.dataset.link, "copy");
+      }
+    }
+  });
+  document.getElementById("email").addEventListener("click", function (event) {
+    record(event.currentTarget.dataset.link, "open");
+  });
+
+  // One captcha window for both the email and the message. `openCaptcha(action)`
+  // shows it with a fresh picture; Confirm hands the captcha id and answer to
+  // `action`, which answers "done" (close), "captcha" (wrong: new picture) or
+  // another error key to show in the window.
+  const dialog = document.getElementById("captcha");
+  const picture = document.getElementById("captcha-picture");
+  const answer = document.getElementById("captcha-answer");
+  const confirmButton = document.getElementById("captcha-confirm");
+  let captchaId = null;
+  let pending = null;
+
+  // The server gives one captcha per address per second, so a 429 is tried
+  // again a second later.
+  function newCaptcha() {
+    answer.value = "";
+    captchaId = null;
+    picture.removeAttribute("src");
+    fetch("/api/captcha").then(function (response) {
+      if (response.status === 429) {
+        setTimeout(newCaptcha, 1000);
+        return null;
+      }
+      return response.status === 200 ? response.json() : null;
+    }).then(function (body) {
+      if (body) {
+        captchaId = body.id;
+        picture.src = body.image;
+        answer.focus();
+      }
+    }).catch(function () {});
+  }
+
+  function openCaptcha(action) {
+    pending = action;
+    showError("captcha-error", null);
+    confirmButton.disabled = false;
+    dialog.showModal();
+    newCaptcha();
+  }
+
+  document.getElementById("captcha-refresh").addEventListener("click", newCaptcha);
+  document.getElementById("captcha-cancel").addEventListener("click", function () {
+    dialog.close();
+  });
+  document.getElementById("captcha-form").addEventListener("submit", function (event) {
+    event.preventDefault();
+    if (captchaId === null || answer.value.trim() === "") {
+      answer.focus();
+      return;
+    }
+    confirmButton.disabled = true;
+    pending(captchaId, answer.value).then(function (outcome) {
+      confirmButton.disabled = false;
+      if (outcome === "done") {
+        showError("captcha-error", null);
+        dialog.close();
+      } else {
+        showError("captcha-error", outcome);
+        if (outcome === "captcha") {
+          newCaptcha();
+        }
+      }
+    });
+  });
+
+  // The email is not in this page: it comes from /api/email for a solved
+  // captcha, and then takes the place of the button.
+  document.getElementById("email-show").addEventListener("click", function () {
+    openCaptcha(function (id, typed) {
+      return fetch("/api/email", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({captcha: id, answer: typed}),
+      }).then(function (response) {
+        return response.status === 200 ? response.json() : null;
+      }).then(function (body) {
+        if (!body) {
+          return "captcha";
+        }
+        const link = document.getElementById("email");
+        link.href = "mailto:" + body.email;
+        link.dataset.link = "mailto:" + body.email;
+        link.querySelector("span").textContent = body.email;
+        link.hidden = false;
+        document.getElementById("email-show").hidden = true;
+        return "done";
+      }).catch(function () {
+        return "failed";
+      });
+    });
+  });
+
+  // The message: its fields are checked here first, so the captcha window
+  // only opens for something the server will take.
+  const messageForm = document.getElementById("message-form");
+  const name = document.getElementById("message-name");
+  const text = document.getElementById("message-text");
+  const contact = document.getElementById("message-contact");
+  for (const radio of document.querySelectorAll('input[name="kind"]')) {
+    radio.addEventListener("change", function () {
+      contact.placeholder = STRINGS[language].where[kind()];
+      contact.focus();
+    });
+  }
+
+  // The same three limits the server keeps, all on the trimmed text.
+  function wordCount(value) {
+    const trimmed = value.trim();
+    return trimmed === "" ? 0 : trimmed.split(/\s+/).length;
+  }
+  function count() {
+    document.getElementById("message-count").textContent = STRINGS[language].count(wordCount(text.value));
+  }
+  text.addEventListener("input", count);
+
+  messageForm.addEventListener("submit", function (event) {
+    event.preventDefault();
+    const trimmedName = name.value.trim();
+    const trimmedText = text.value.trim();
+    const trimmedContact = contact.value.trim();
+    let wrong = false;
+    showError("message-name-error", null);
+    showError("message-text-error", null);
+    showError("message-contact-error", null);
+    if (trimmedName === "" || Array.from(trimmedName).length > 100) {
+      showError("message-name-error", "name");
+      wrong = true;
+    }
+    if (trimmedText === "") {
+      showError("message-text-error", "empty");
+      wrong = true;
+    } else if (wordCount(trimmedText) > 1000 || Array.from(trimmedText).length > 5000
+        || new TextEncoder().encode(trimmedText).length > 10000) {
+      showError("message-text-error", "long");
+      wrong = true;
+    }
+    if (Array.from(trimmedContact).length > 200) {
+      showError("message-contact-error", "contact");
+      wrong = true;
+    }
+    if (wrong) {
+      return;
+    }
+    openCaptcha(function (id, typed) {
+      return fetch("/api/message", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          name: trimmedName,
+          text: trimmedText,
+          contact_kind: kind(),
+          contact: trimmedContact,
+          language: language,
+          device: device,
+          captcha: id,
+          answer: typed,
+        }),
+      }).then(function (response) {
+        if (response.status === 204) {
+          messageForm.hidden = true;
+          document.getElementById("message-sent").hidden = false;
+          return "done";
+        }
+        if (response.status === 400) {
+          return response.json().then(function (body) {
+            if (body.error === "captcha") {
+              return "captcha";
+            }
+            // A field the server refused: back to the form to fix it.
+            const fields = {name: ["message-name-error", "name"], text: ["message-text-error", "long"]};
+            const field = fields[body.error] || ["message-contact-error", "contact"];
+            showError(field[0], field[1]);
+            return "done";
+          });
+        }
+        return "failed";
+      }).catch(function () {
+        return "failed";
+      });
+    });
+  });
+
+  applyLanguage();
+</script>
+
+</body>
+</html>

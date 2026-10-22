@@ -4,7 +4,7 @@
 
 **The source of [pouriya.net](https://pouriya.net).**
 
-One binary and one SQLite file. It serves the page, counts each page open and each browser privately, and shows the contact email only after a captcha is solved, so scrapers don't find it.
+One binary and one SQLite file. It serves the pages, counts each page open, each browser and each link followed, privately, shows the contact email only after a captcha is solved, so scrapers don't find it, and keeps the messages people send from the contact page, behind a captcha too.
 
 ## Run it
 
@@ -28,10 +28,10 @@ pouriya-www speaks plain HTTP. Put it behind nginx, Caddy or a CDN that terminat
 
 ## Make it yours
 
-The site's settings are constants at the top of `src/main.rs`: title, description, links, the email and the captcha limits. Change them and rebuild. The look is `www/`, where `index.html` is a template with `{{title}}`, `{{description}}`, `{{url}}`, `{{github}}`, `{{telegram}}` and `{{blog}}` filled in by the server.
+The site's settings are constants at the top of `src/main.rs`: title, description, links, the email, the captcha and the message limits. Change them and rebuild. The look is `www/`, where `index.html` (`/`), `software.html` (`/software`) and `contact.html` (`/contact`) are templates with `{{title}}`, `{{description}}`, `{{url}}`, `{{github}}`, `{{telegram}}` and `{{blog}}` filled in by the server.
 
 ## Look at the numbers
 
 ```bash
-sqlite3 pouriya-www.db 'SELECT count(*) FROM visit; SELECT count(*) FROM device; SELECT * FROM robot;'
+sqlite3 pouriya-www.db 'SELECT count(*) FROM visit; SELECT count(*) FROM device; SELECT link, count(*) FROM click GROUP BY link; SELECT name, text, contact_kind, contact FROM message; SELECT * FROM robot;'
 ```

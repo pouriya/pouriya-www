@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pouriya · software</title>
+<meta name="description" content="Open-source software by {{description}}: projects contributed to and things written.">
+<link rel="canonical" href="{{url}}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{title}}">
+<meta property="og:title" content="pouriya · software">
+<meta property="og:description" content="Open-source software by {{description}}.">
+<meta property="og:url" content="{{url}}">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="{{home}}pouriya.png">
+<meta property="og:image:width" content="460">
+<meta property="og:image:height" content="460">
+<meta name="twitter:card" content="summary">
+<meta name="color-scheme" content="light dark">
+<link rel="preload" href="/fonts/Inconsolata-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face {
+  font-family: "Inconsolata";
+  src: url("/fonts/Inconsolata-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inconsolata";
+  src: url("/fonts/Inconsolata-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  --bg: #fbfaf7;
+  --fg: #1f1e1c;
+  --muted: #77736b;
+  --rule: #dcd8cf;
+  --accent: #a8461f;
+  --green: #0d8800;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151514;
+    --fg: #e6e3dc;
+    --muted: #8d897f;
+    --rule: #33322f;
+    --accent: #e8915f;
+    --green: #4ade80;
+  }
+}
+
+* { box-sizing: border-box; }
+html { background: var(--bg); color: var(--fg); }
+body {
+  margin: 0 auto;
+  max-width: 76ch;
+  padding: 3rem 1.25rem 4rem;
+  font: 17px/1.55 "Inconsolata", ui-monospace, monospace;
+}
+a { color: inherit; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+a:hover { color: var(--accent); text-decoration-color: currentColor; }
+
+header { margin-bottom: 0; }
+header p { margin: 0 0 .75rem; }
+header a.contact { font-weight: 700; }
+header a.contact:hover { color: var(--green); }
+
+h2 {
+  margin: 3.5rem 0 1.5rem;
+}
+h2 {
+  font-size: inherit;
+  font-weight: 700;
+}
+h3 {
+  display: flex;
+  align-items: center;
+  gap: 1ch;
+  margin: 2rem 0 1.5rem;
+  font-size: inherit;
+  font-weight: 400;
+  color: var(--muted);
+}
+h3::before { content: "──"; color: var(--rule); }
+h3::after { content: ""; flex: 1; border-top: 1px solid var(--rule); }
+
+.entry {
+  display: grid;
+  grid-template-columns: 22ch 1fr;
+  column-gap: 2ch;
+  margin-bottom: 1.25rem;
+}
+.entry > .name { font-weight: 700; }
+.entry p { margin: 0; }
+.entry .meta { color: var(--muted); }
+.entry .meta a { color: var(--muted); }
+.entry .meta a:hover { color: var(--accent); }
+
+.contrib { margin-bottom: 1.75rem; }
+.contrib p { margin: 0; }
+.contrib span { color: var(--muted); margin-left: 1ch; }
+.contrib ul { margin: .35rem 0 0; padding: 0; list-style: none; }
+.contrib li::before { content: "- "; color: var(--muted); }
+
+footer { margin-top: 4rem; color: var(--muted); }
+footer em { font-style: normal; color: var(--green); }
+footer a { color: var(--fg); font-weight: 700; }
+
+@media (max-width: 560px) {
+  body { padding-top: 2rem; }
+  .entry { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+
+<header>
+  <p>I have been writing software for years, and since 2016 I have published the parts I thought others could use.</p>
+  <p>Everything here is open source. Work I have done for companies is not included.</p>
+  <p>Get in touch: <a class="contact" href="/contact?l=en">/contact</a></p>
+</header>
+
+<h2>Projects I contributed to</h2>
+
+<div class="contrib">
+  <p><b>erlang/otp</b> <span>The Erlang runtime and its standard libraries.</span></p>
+  <ul>
+    <li><a href="/go?to=https://github.com/erlang/otp/pull/5683" target="_blank" rel="noopener">Handle invalid timeout values returned from gen_server callbacks</a></li>
+    <li><a href="/go?to=https://github.com/erlang/otp/pull/2411" target="_blank" rel="noopener">Fix gen_server:reply/2</a></li>
+    <li><a href="/go?to=https://github.com/erlang/otp/pull/2373" target="_blank" rel="noopener">Handle more config files with one -config flag</a></li>
+    <li><a href="/go?to=https://github.com/erlang/otp/pull/1781" target="_blank" rel="noopener">sys: install one debug function more than once</a></li>
+  </ul>
+</div>
+
+<div class="contrib">
+  <p><b>golang/go</b> <span>The Go compiler, runtime and standard library.</span></p>
+  <ul>
+    <li><a href="/go?to=https://github.com/golang/go/commit/4c08c125936b4ae3daff04cecf5309dd5dd1e2c5" target="_blank" rel="noopener">runtime: use .Pointers() instead of manual checking</a></li>
+  </ul>
+</div>
+
+<div class="contrib">
+  <p><b>twitter/the-algorithm</b> <span>The source of X's recommendation algorithm.</span></p>
+  <ul>
+    <li><a href="/go?to=https://github.com/twitter/the-algorithm/pull/452" target="_blank" rel="noopener">Refactor navi/dr_transform</a></li>
+  </ul>
+</div>
+
+<div class="contrib">
+  <p><b>rust-lang/rust</b> <span>The Rust compiler and standard library.</span></p>
+  <ul>
+    <li><a href="/go?to=https://github.com/rust-lang/rust/pull/116133" target="_blank" rel="noopener">bootstrap.py: add an eprint function</a></li>
+  </ul>
+</div>
+
+<div class="contrib">
+  <p><b>ejabberd</b> <span>A scalable XMPP, MQTT and SIP messaging server.</span></p>
+  <ul>
+    <li><a href="/go?to=https://github.com/processone/ejabberd/pull/4471" target="_blank" rel="noopener">Pass HTTP headers from WebSocket to C2S</a></li>
+    <li><a href="/go?to=https://github.com/processone/ejabberd/pull/4356" target="_blank" rel="noopener">c2s_handle_bind hook</a></li>
+    <li><a href="/go?to=https://github.com/processone/ejabberd/pull/4238" target="_blank" rel="noopener">Prometheus support</a></li>
+    <li><a href="/go?to=https://github.com/processone/ejabberd-contrib/pull/337" target="_blank" rel="noopener">Prometheus support in ejabberd-contrib</a></li>
+    <li><a href="/go?to=https://github.com/processone/ejabberd/pull/3756" target="_blank" rel="noopener">Process hook tracing</a></li>
+    <li><a href="/go?to=https://github.com/processone/ejabberd/pull/3622" target="_blank" rel="noopener">Fix WebSocket typos</a></li>
+    <li><a href="/go?to=https://github.com/processone/ejabberd/pull/3460" target="_blank" rel="noopener">JWT enhancement</a></li>
+    <li><a href="/go?to=https://github.com/processone/ejabberd/pull/3446" target="_blank" rel="noopener">Hook to check the decoded JWT after authentication</a></li>
+    <li><a href="/go?to=https://github.com/processone/ejabberd/pull/2357" target="_blank" rel="noopener">Hook for packets sent from components</a></li>
+  </ul>
+</div>
+
+<div class="contrib">
+  <p><b>moq-dev/web-transport</b> <span>A Rust WebTransport library for native and WASM.</span></p>
+  <ul>
+    <li><a href="/go?to=https://github.com/moq-dev/web-transport/pull/397" target="_blank" rel="noopener">qmux: batch writer frames, flushing the transport once</a></li>
+  </ul>
+</div>
+
+<h2>Notable things I wrote</h2>
+
+<h3>libraries</h3>
+
+<div class="entry">
+  <div class="name">keshvar</div>
+  <div>
+    <p>Every country's data: ISO names, currency, languages, phone codes, subdivisions, geo bounds and translations.&nbsp; <span class="meta"><a href="/go?to=https://github.com/pouriya/keshvar" target="_blank" rel="noopener">GitHub</a></span></p>
+  </div>
+</div>
+
+<div class="entry">
+  <div class="name">tanzim</div>
+  <div>
+    <p>Configuration pipeline: load, parse, merge, validate. Every value and every error knows its file, line and column.&nbsp; <span class="meta"><a href="/go?to=https://github.com/pouriya/tanzim" target="_blank" rel="noopener">GitHub</a></span></p>
+  </div>
+</div>
+
+<div class="entry">
+  <div class="name">director</div>
+  <div>
+    <p>A supervisor for Erlang/Elixir processes built for speed and flexibility, with children kept in a list, a map, ETS or Mnesia.&nbsp; <span class="meta"><a href="/go?to=https://github.com/pouriya/director" target="_blank" rel="noopener">GitHub</a></span></p>
+  </div>
+</div>
+
+<div class="entry">
+  <div class="name">sockerl</div>
+  <div>
+    <p>TCP servers, clients and connection pools for Erlang/Elixir, with SSL.&nbsp; <span class="meta"><a href="/go?to=https://github.com/pouriya/sockerl" target="_blank" rel="noopener">GitHub</a></span></p>
+  </div>
+</div>
+
+
+<h3>utilities</h3>
+
+<div class="entry">
+  <div class="name">tir</div>
+  <div>
+    <p>time.ir in your shell: today in the Persian and Gregorian calendars, with desktop notifications.&nbsp; <span class="meta"><a href="/go?to=https://github.com/pouriya/tir" target="_blank" rel="noopener">GitHub</a></span></p>
+  </div>
+</div>
+
+<div class="entry">
+  <div class="name">sssh</div>
+  <div>
+    <p>Pick a server from a list and connect. A small SSH launcher.&nbsp; <span class="meta"><a href="/go?to=https://github.com/pouriya/sssh" target="_blank" rel="noopener">GitHub</a></span></p>
+  </div>
+</div>
+
+<div class="entry">
+  <div class="name">pcrypt</div>
+  <div>
+    <p>Archive, encrypt (AES-256) and compress (Zstd) a directory in one ~1 MB binary.&nbsp; <span class="meta"><a href="/go?to=https://github.com/pouriya/pcrypt" target="_blank" rel="noopener">GitHub</a></span></p>
+  </div>
+</div>
+
+<h3>applications</h3>
+
+<div class="entry">
+  <div class="name">borhan</div>
+  <div>
+    <p>Memory for AI agents. Search by idea, in English and Persian, over MCP, the command line or HTTP.&nbsp; <span class="meta"><a href="/go?to=https://github.com/pouriya/borhan" target="_blank" rel="noopener">GitHub</a></span></p>
+  </div>
+</div>
+
+<div class="entry">
+  <div class="name">espai</div>
+  <div>
+    <p>Any agent that can run curl gets a real browser. No SDK, no MCP, no API key.&nbsp; <span class="meta"><a href="/go?to=https://github.com/pouriya/espai" target="_blank" rel="noopener">GitHub</a></span></p>
+  </div>
+</div>
+
+<div class="entry">
+  <div class="name">mcpd</div>
+  <div>
+    <p>A ~3 MB MCP daemon: any script becomes a tool for AI assistants.&nbsp; <span class="meta"><a href="/go?to=https://github.com/pouriya/mcpd" target="_blank" rel="noopener">GitHub</a></span></p>
+  </div>
+</div>
+
+<div class="entry">
+  <div class="name">plogia</div>
+  <div>
+    <p>A blog that reads like a Telegram channel: Markdown posts, real view counts, email subscribers, RSS.&nbsp; <span class="meta"><a href="/go?to=https://github.com/pouriya/plogia" target="_blank" rel="noopener">GitHub</a></span></p>
+  </div>
+</div>
+
+<footer>
+  You can <em>find</em> more on my GitHub: <a href="/go?to=https://github.com/pouriya" target="_blank" rel="noopener">github.com/pouriya</a>
+</footer>
+
+<script>
+  // Every link to another site goes through /go, which records the click
+  // and sends the browser on. Our own pages are plain links: their visit,
+  // with its referrer, is the record. Tell it which page this is and, once known, the device.
+  function tag(device) {
+    for (const link of document.querySelectorAll('a[href^="/go?"]')) {
+      if (!link.dataset.go) {
+        link.dataset.go = link.getAttribute("href");
+      }
+      let href = link.dataset.go + "&from=" + encodeURIComponent(location.pathname);
+      if (device) {
+        href += "&device=" + encodeURIComponent(device);
+      }
+      link.setAttribute("href", href);
+    }
+  }
+
+  // The handshake, once per page open: the server counts it as a visit and
+  // hands back this browser's device id. A browser driven by automation says
+  // so in navigator.webdriver, and sends nothing.
+  let device = null;
+  try {
+    device = localStorage.getItem("pouriya-www.device");
+  } catch (error) {}
+  tag(device);
+  if (!navigator.webdriver) {
+    fetch("/api/visit", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({device: device, path: location.pathname, referrer: document.referrer}),
+    }).then(function (response) {
+      return response.status === 200 ? response.json() : null;
+    }).then(function (body) {
+      if (body) {
+        try {
+          localStorage.setItem("pouriya-www.device", body.device);
+        } catch (error) {}
+        tag(body.device);
+      }
+    }).catch(function () {});
+  }
+</script>
+
+</body>
+</html>

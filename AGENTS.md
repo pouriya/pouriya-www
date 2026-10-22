@@ -1,10 +1,11 @@
 # pouriya-www
 
 The source of pouriya.net. One binary serves a front end (`--www`) with
-`index.html` filled in from settings in `src/main.rs`, and counts who came in
-SQLite (`--db`). Nothing it counts is shown on the site. Plain HTTP on
-`--port`, meant to sit behind a reverse proxy that terminates TLS; `--url` is
-the address visitors use.
+`index.html`, `software.html` and `contact.html` filled in from settings in
+`src/main.rs`, counts who came and which links they followed, and keeps the
+messages sent from the contact page, in SQLite (`--db`). Nothing
+it counts is shown on the site. Plain HTTP on `--port`, meant to sit behind a
+reverse proxy that terminates TLS; `--url` is the address visitors use.
 
 ## ⚠️ Read this before writing any code
 
@@ -51,7 +52,17 @@ result; do not claim it passed without running it.
 src/main.rs     The whole backend: settings consts, CLI, schema, routes, handlers
 www/            The front end, served as-is from --www
   index.html    Template for / and /index.html; {{name}} filled by the server.
-                For now only the visit handshake and the email captcha, unstyled
+                Name, tagline, and the three ways on: software, thoughts
+                (plogia.ir, new tab, ?l= in the page's language) and contact.
+                English and Persian
+  software.html Template for /software: open-source contributions and projects.
+                English only
+  pouriya.png   The portrait: beside the name on the home page, and og:image
+                on every page. ASCII art on white, blended into the page
+  contact.html  Template for /contact: Telegram, X, the email behind a captcha,
+                and a message form behind another. English and Persian
+  fonts/        Inconsolata (English) and Vazirmatn (Persian), woff2, each
+                with its OFL licence beside it
 Makefile        Every build/check entry point. Use it, not cargo.
 README.md       For people running it
 LICENSE         MIT
@@ -64,9 +75,13 @@ No configuration file and no environment variables. What the site *is* lives
 as `const`s at the top of `src/main.rs`: `SITE_TITLE` (`pouriya.net`),
 `SITE_DESCRIPTION` (`Pouriya Jahanbakhsh`), `LINK_GITHUB`
 (`https://github.com/pouriya`), `LINK_TELEGRAM` (`https://t.me/plogia`),
-`LINK_BLOG` (`https://plogia.ir`), `EMAIL`, `CAPTCHA_DIFFICULTY` (Easy),
-`CAPTCHA_NAME` (Lucy), `CAPTCHA_LIFETIME` (10 minutes), `CAPTCHA_LIMIT`
-(1000), `CAPTCHA_ADDRESSES_PER_SECOND` (100), `TEXT_LIMIT`, `ROBOT_MARKERS`.
+`LINK_BLOG` (`https://plogia.ir`), `EMAIL`, `CAPTCHA_LENGTH` (5),
+`CAPTCHA_LIFETIME` (10 minutes), `CAPTCHA_LIMIT` (1000),
+`CAPTCHA_ADDRESSES_PER_SECOND` (100), `MESSAGE_NAME_LIMIT` (100 characters),
+`MESSAGE_WORD_LIMIT` (1000), `MESSAGE_CHARACTER_LIMIT` (5000),
+`MESSAGE_BYTE_LIMIT` (10000), `MESSAGE_CONTACT_LIMIT` (200),
+`MESSAGE_CONTACT_KINDS` (`phone`, `telegram`, `email`, `other`), `TEXT_LIMIT`,
+`ROBOT_MARKERS`.
 What differs per machine comes from the command line, and every flag is
 mandatory with no default:
 
@@ -82,15 +97,18 @@ port firewalled so only the proxy reaches it.
 
 ## Template
 
-`index.html` is read from disk on every request, so a front-end change is live
-on the next load. `{{name}}` is replaced, HTML-escaped, in one pass; unknown
+`index.html` (`/`), `software.html` (`/software`) and `contact.html`
+(`/contact`) are read from disk on every request, so a front-end change is live
+on the next load. The last two are never served raw: `/software.html` and
+`/contact.html` are `404`. `{{name}}` is replaced, HTML-escaped, in one pass; unknown
 names are left as written.
 
 | Name | Value |
 |------|-------|
 | `title` | `SITE_TITLE` |
 | `description` | `SITE_DESCRIPTION` |
-| `url` | `--url` with a trailing `/` |
+| `url` | `--url` then the page's path: `/`, `/software` or `/contact` |
+| `home` | `--url` then `/`, on every page: the site root, for `og:image` |
 | `github` | `LINK_GITHUB` |
 | `telegram` | `LINK_TELEGRAM` |
 | `blog` | `LINK_BLOG` |
@@ -98,17 +116,31 @@ names are left as written.
 **`EMAIL` is never a template name.** It is not in the page, so scrapers
 reading the HTML do not find it; only `POST /api/email` gives it out.
 
-The page is English (`lang="en"`, `og:locale=en_US`). A Persian switch may
-come later.
+`software.html` is English only. `contact.html` holds both languages:
+**Persian by default** — the HTML itself is written in Persian, right to left,
+`og:locale=fa_IR`, so link previews and visitors without JavaScript get Persian
+— and an English / فارسی toggle at the top switches the text and the direction
+in place and is remembered in `localStorage` (`pouriya-www.language`); `?l=fa`
+or `?l=en` in the link wins. `/software` links to `/contact?l=en`. Persian is set
+in Vazirmatn, everything else in Inconsolata. `index.html` works the same way,
+sharing the remembered language with `/contact`.
+
+Tab titles are `پوریا` for the home page and `پوریا · ارتباط با من` for the
+contact page, in English `pouriya` and `pouriya · contact`; `pouriya · software`
+is English only.
 
 ## HTTP
 
 | Route | What |
 |-------|------|
 | `GET /`, `/index.html` | `www/index.html` with its `{{name}}` fields filled |
+| `GET /software`, `/contact` | `www/software.html`, `www/contact.html` the same way |
+| `GET /go?to=URL&from=PATH&device=ID` | Records the click, then `303` to `URL`; `404` unless a `www/*.html` page has `href="/go?to=URL"` |
+| `POST /api/click` | By beacon: `{link, action, page, device?}`, `action` `copy` (a handle or the email copied) or `open` (the email's `mailto:` link) → `204`; `404` unless `/go` would take `link` or it is `mailto:` + `EMAIL` |
 | `POST /api/visit` | The handshake, once per page open: `{device?, path, referrer}` → `{device}` |
 | `GET /api/captcha` | `{id, image}`, a `data:image/png` URL; `429` + `Retry-After: 1` over the limit |
 | `POST /api/email` | `{captcha, answer}` → `{email}`, or `400 {error: "captcha"}` |
+| `POST /api/message` | `{name, text, contact_kind, contact, language, device?, captcha, answer}` → `204`, or `400 {error}` naming `name`, `text`, `contact` or `captcha` |
 | anything else | A file from `--www`, else `404` |
 
 Behind the proxy, the client address is the right-most entry of `Forwarded:
@@ -125,6 +157,8 @@ carries `X-Content-Type-Options: nosniff`.
 ```sql
 device (id BLOB PRIMARY KEY, created_at)          -- ULID, one per browser
 visit  (id, device, at, ip, user_agent, referrer, language, path)   -- every page open
+click  (id, at, ip, link, page, device?, action)  -- every outbound link followed (open) or handle/email copied (copy)
+message (id, at, ip, device?, language, name, text, contact_kind, contact)  -- contact-page messages
 robot  (day, kind, dropped, PRIMARY KEY (day, kind))  -- refused robots, per UTC day
 ```
 
@@ -133,29 +167,57 @@ robot  (day, kind, dropped, PRIMARY KEY (day, kind))  -- refused robots, per UTC
   know gets a new one. 48 bits of milliseconds then 80 random bits from
   `getrandom`, Crockford base32, hand-written after borhan's, no monotonic
   factory.
-- **A view is a page open**: one `visit` row. Unique visitors are `device`
+- **A view is a page open**: one `visit` row. Links between our own pages are
+  plain (`/software`, `/contact?l=en`), never `/go`: the visit and its
+  `referrer` (the page it came from) are the record of the move. Unique visitors are `device`
   rows. Strings from the client or its headers are clipped to `TEXT_LIMIT`
   characters.
 - **Nothing is shown publicly.** The numbers stay in SQLite; a private stats
   page behind a login and a captcha is planned, not built.
-- **Robots** are refused from visits, captchas and the email, and only
-  counted under `kind` `page`, `visit`, `captcha` or `email`. `page` is still
+- **Clicks**: every link to another site is `href="/go?to=URL"` with
+  `target="_blank"`, written literally (not through `{{name}}`), because the
+  pages are the allow-list: `/go` reads every `www/*.html` and refuses a `to` none of them
+  links to, so it is no open redirect. The page script appends `from` (its
+  path) and `device` once it has one. `device` is kept only if the database
+  knows it. A redirect, not a beacon, so leaving the page cannot cancel the
+  record; with JavaScript off the click is recorded without page or device.
+  What `/go` cannot see comes by `sendBeacon` to `POST /api/click`: copying a
+  handle or the revealed email on `/contact` (the browser's `copy` event, when
+  the selection takes in one), `action` `copy`; and opening the email's
+  `mailto:` link, `action` `open`. Rows from `/go` are `open`.
+- **Robots** are refused from visits, clicks, captchas, the email and
+  messages, and only counted under `kind` `page`, `visit`, `click`, `captcha`,
+  `email` or `message`. A robot
+  following `/go` is still redirected. `page` is still
   served, so link previews work. A User-Agent not starting with `Mozilla/`, or
   containing one of `ROBOT_MARKERS`, is a robot; the front end also sends
   nothing when `navigator.webdriver` is set. A refused API call gets `204`.
   Times are Unix milliseconds.
 
-## Email behind a captcha
+## Email and messages behind captchas
 
-- **Captchas** are the `captcha` crate's `CAPTCHA_DIFFICULTY` preset
-  (`CAPTCHA_NAME`), held in memory only: at most `CAPTCHA_LIMIT`, the oldest
+- **Captchas** are drawn like the `captcha` crate's `Lucy` preset at `Medium`
+  difficulty (noise 0.4, a 6×6 grid, 220×120), but always `CAPTCHA_LENGTH`
+  characters, where the presets pick 4 to 6. Held in memory only: at most `CAPTCHA_LIMIT`, the oldest
   pushed out past that, each good for `CAPTCHA_LIFETIME` and one try, answered
   without case. One per client address per second, and at most
   `CAPTCHA_ADDRESSES_PER_SECOND` addresses in any second; the rest get `429`.
-- **Front end**: a "Show email" button opens the captcha picture, ↻ for a new
-  one, and an answer field. A right answer replaces the form with a `mailto:`
-  link; a wrong one fetches a new captcha. Nothing is remembered: a reload asks
-  again.
+- **Email**, on `/contact`: a "Show email" button opens the captcha picture, ↻
+  for a new one, and an answer field. A right answer replaces the form with a
+  `mailto:` link; a wrong one fetches a new captcha. Nothing is remembered: a
+  reload asks again.
+- **Messages**, on `/contact`, with their own captcha, fetched the first time
+  the form is touched so opening the page costs none. A required name (up to
+  `MESSAGE_NAME_LIMIT` characters), a required text (at most
+  `MESSAGE_WORD_LIMIT` words, `MESSAGE_CHARACTER_LIMIT` characters and
+  `MESSAGE_BYTE_LIMIT` UTF-8 bytes, all after trimming), and an optional way
+  to reply: a kind from `MESSAGE_CONTACT_KINDS` and up to
+  `MESSAGE_CONTACT_LIMIT` characters of anything, not checked further. The
+  fields are checked before the captcha, which a typo should not cost; the
+  front end checks the same limits first. Sent, the form is replaced by "Your
+  message was sent."; another needs a reload. Messages are only stored, for the
+  author's own dashboard: no log line, no notification. `device` is kept only
+  if the database knows it; `language` is the page's, to reply in.
 - Each email given out logs `Gave out the email` (`info`) with the client
   `ip`. It is not stored in the database.
 

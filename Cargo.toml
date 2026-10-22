@@ -1,6 +1,6 @@
 [package]
 name = "pouriya-www"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "pouriya.net source code"
 authors = ["Pouriya Jahanbakhsh <pouriya.jahanbakhsh@gmail.com>"]
@@ -16,6 +16,7 @@ axum = { version = "0.8.9", default-features = false, features = [
     "tokio",
     "json",
     "matched-path",
+    "query",
 ] }
 
 tokio = { version = "1.53.3", default-features = false, features = [
