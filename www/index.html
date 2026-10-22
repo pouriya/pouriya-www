@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{title}}</title>
+  <meta name="description" content="{{description}}">
+  <link rel="canonical" href="{{url}}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{title}}">
+  <meta property="og:title" content="{{title}}">
+  <meta property="og:description" content="{{description}}">
+  <meta property="og:url" content="{{url}}">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary">
+</head>
+<body>
+  <button id="email-show" type="button">Show email</button>
+  <form id="email-form" hidden>
+    <img id="email-captcha" alt="Captcha">
+    <button id="email-refresh" type="button" aria-label="New captcha">↻</button>
+    <input id="email-answer" autocomplete="off" required>
+    <button type="submit">OK</button>
+  </form>
+  <a id="email" hidden></a>
+
+  <script>
+    // The handshake, once per page open: the server counts it as a visit and
+    // hands back this browser's device id. A browser driven by automation
+    // says so in navigator.webdriver, and sends nothing.
+    if (!navigator.webdriver) {
+      let device = null;
+      try {
+        device = localStorage.getItem("pouriya-www.device");
+      } catch (error) {}
+      fetch("/api/visit", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({device: device, path: location.pathname, referrer: document.referrer}),
+      }).then(function (response) {
+        return response.status === 200 ? response.json() : null;
+      }).then(function (body) {
+        if (body) {
+          try {
+            localStorage.setItem("pouriya-www.device", body.device);
+          } catch (error) {}
+        }
+      }).catch(function () {});
+    }
+
+    // The email is not in this page: it comes from /api/email for a solved
+    // captcha. A wrong answer costs the captcha, so a new one is fetched.
+    const show = document.getElementById("email-show");
+    const form = document.getElementById("email-form");
+    const picture = document.getElementById("email-captcha");
+    const answer = document.getElementById("email-answer");
+    const link = document.getElementById("email");
+    let captcha = null;
+
+    function newCaptcha() {
+      answer.value = "";
+      fetch("/api/captcha").then(function (response) {
+        if (response.status === 429) {
+          setTimeout(newCaptcha, 1000);
+          return null;
+        }
+        return response.status === 200 ? response.json() : null;
+      }).then(function (body) {
+        if (body) {
+          captcha = body.id;
+          picture.src = body.image;
+          answer.focus();
+        }
+      }).catch(function () {});
+    }
+
+    show.addEventListener("click", function () {
+      show.hidden = true;
+      form.hidden = false;
+      newCaptcha();
+    });
+    document.getElementById("email-refresh").addEventListener("click", newCaptcha);
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      fetch("/api/email", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({captcha: captcha, answer: answer.value}),
+      }).then(function (response) {
+        return response.status === 200 ? response.json() : null;
+      }).then(function (body) {
+        if (body) {
+          form.hidden = true;
+          link.href = "mailto:" + body.email;
+          link.textContent = body.email;
+          link.hidden = false;
+        } else {
+          newCaptcha();
+        }
+      }).catch(function () {});
+    });
+  </script>
+</body>
+</html>
