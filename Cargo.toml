@@ -1,6 +1,6 @@
 [package]
 name = "pouriya-www"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "pouriya.net source code"
 authors = ["Pouriya Jahanbakhsh <pouriya.jahanbakhsh@gmail.com>"]

@@ -217,7 +217,19 @@ dialog p.label { margin: 0 0 1rem; color: var(--muted); }
 
 @media (max-width: 560px) {
   body { padding-top: 2rem; }
-  .ways { flex-direction: column; align-items: flex-start; }
+  /* Phones: three equal columns, each logo centred over its handle; the
+     revealed email is too long for a column and takes a line of its own. */
+  .ways {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    align-items: start;
+    gap: 1.25rem 1ch;
+    font-size: 15px;
+  }
+  .way { flex-direction: column; align-items: center; text-align: center; gap: .5rem; }
+  .way svg { width: 24px; height: 24px; }
+  .handles { align-items: center; }
+  #email:not([hidden]) { grid-column: 1 / -1; flex-direction: row; justify-content: center; }
 }
 </style>
 </head>

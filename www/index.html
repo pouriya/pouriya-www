@@ -93,12 +93,14 @@ a:hover { color: var(--accent); text-decoration-color: currentColor; }
 }
 #language:hover { color: var(--accent); }
 
-/* Me: the portrait beside the name and tagline. It is drawn on white, so
-   it is blended into the page, and inverted in dark mode. */
+/* Me: the portrait beside the name and tagline. It is ASCII art, black on
+   white, where dense characters are the dark parts of the face: inverting it
+   would make a negative. So it is blended into the light page, and in dark
+   mode shown as it is, on its own light square, a little dimmed. */
 .me { display: flex; align-items: center; gap: 2.5ch; }
 .portrait { width: 7rem; height: 7rem; flex: none; mix-blend-mode: multiply; }
 @media (prefers-color-scheme: dark) {
-  .portrait { filter: invert(1); mix-blend-mode: screen; }
+  .portrait { mix-blend-mode: normal; filter: brightness(.88); }
 }
 h1 { margin: 0; font-size: inherit; font-weight: 700; }
 .tagline { margin: .35rem 0 0; color: var(--muted); }
