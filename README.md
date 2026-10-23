@@ -12,21 +12,21 @@ With Docker. `www/` is baked into the image, and the database lives in the `pour
 
 ```bash
 make docker
-docker run --rm -i --entrypoint pouriya-www pouriya-www:latest hash    # type the admin password, get its hash
+docker run --rm -i --entrypoint pouriya-www pouriya-www:latest hash-hex    # type the admin password, get its hash in hex
 docker run -d --name pouriya-www -p 8080:8080 -v pouriya-www:/var/lib/pouriya-www pouriya-www:latest \
-    --url https://example.com --admin-path /some-secret-word --admin-hash '<the hash>'
+    --url https://example.com --admin-path /some-secret-word --admin-hash-hex <the hex>
 ```
 
 From source, with a Rust toolchain. `make release` puts the binary in `build/`:
 
 ```bash
 make release
-build/pouriya-www-<version>-<target> hash    # type the admin password, get its hash
+build/pouriya-www-<version>-<target> hash-hex    # type the admin password, get its hash in hex
 build/pouriya-www-<version>-<target> --www www --db pouriya-www.db --port 8080 --url https://example.com \
-    --admin-path /some-secret-word --admin-hash '<the hash>'
+    --admin-path /some-secret-word --admin-hash-hex <the hex>
 ```
 
-Every flag is required. `--url` is the address visitors use, and it becomes the page's canonical and link-preview URL. `--admin-path` is where the admin page lives; nothing links to it. `--admin-hash` is the admin password's argon2 hash: single-quote it, it is full of `$`.
+Every flag is required. `--url` is the address visitors use, and it becomes the page's canonical and link-preview URL. `--admin-path` is where the admin page lives; nothing links to it. `--admin-hash-hex` is the admin password's argon2 hash in hex, so it needs no quoting anywhere: in a shell, a compose file or a deploy form, paste it as printed.
 
 pouriya-www speaks plain HTTP. Put it behind nginx, Caddy or a CDN that terminates TLS.
 

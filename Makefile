@@ -15,7 +15,7 @@ PORT ?= 8080
 # The canonical link and link-preview URL in index.html.
 URL ?= http://localhost:${PORT}
 # The admin page and its password, for development only: production passes
-# its own --admin-path and --admin-hash.
+# its own --admin-path and --admin-hash-hex.
 ADMIN_PATH ?= /dev-admin
 ADMIN_PASSWORD ?= dev
 
@@ -49,7 +49,7 @@ dev: ${BUILD_DIR}
 start-dev: dev
 	${DEV_CMD} --debug --www ${WWW_DIR} --db ${DB_FILE} --port ${PORT} --url ${URL} \
 		--admin-path ${ADMIN_PATH} \
-		--admin-hash "$$(printf '%s\n' '${ADMIN_PASSWORD}' | ${DEV_CMD} hash)"
+		--admin-hash-hex "$$(printf '%s\n' '${ADMIN_PASSWORD}' | ${DEV_CMD} hash-hex)"
 
 
 # The release binary and www/ in ${DIST_DIR}/${DIST_NAME}.tar.gz, plus its

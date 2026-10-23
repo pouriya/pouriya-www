@@ -90,16 +90,18 @@ What differs per machine comes from the command line, and every flag is
 mandatory with no default:
 
 ```
-pouriya-www --www DIR --db FILE --port PORT --url URL --admin-path PATH --admin-hash HASH [--debug | --trace | --quiet]
-pouriya-www hash
+pouriya-www --www DIR --db FILE --port PORT --url URL --admin-path PATH --admin-hash-hex HEX [--debug | --trace | --quiet]
+pouriya-www hash-hex
 ```
 
 `--url` (`https://pouriya.net`) is where visitors reach the site: the
 canonical link and `og:url`. `--admin-path` is where the admin page is served,
 a plain path of its own (letters, digits, `-_.~`, no trailing `/`) that no page,
 route or file in `--www` takes; it is never written in the source, the docs or
-any page. `--admin-hash` is the admin password's argon2 PHC string, printed by
-`pouriya-www hash` from one line of stdin; both are checked at startup.
+any page. `--admin-hash-hex` is the admin password's argon2 PHC string in hex,
+printed by `pouriya-www hash-hex` from one line of stdin: hex, because the PHC
+string is full of `$` that shells, compose files and deploy forms expand or
+quote. Both are checked at startup.
 
 It binds `0.0.0.0:<port>`, so it works inside a container; on a host, keep the
 port firewalled so only the proxy reaches it.
@@ -290,12 +292,12 @@ only state: `VOLUME /var/lib/pouriya-www`. The runtime image carries the
 
 ```
 docker run -d -p 8080:8080 -v pouriya-www:/var/lib/pouriya-www pouriya-www:latest \
-    --url https://pouriya.net --admin-path /<secret> --admin-hash '<hash>'
+    --url https://pouriya.net --admin-path /<secret> --admin-hash-hex <hex>
 ```
 
-`--url`, `--admin-path` and `--admin-hash` are the flags the image leaves to
+`--url`, `--admin-path` and `--admin-hash-hex` are the flags the image leaves to
 you: they go after the image name. The hash comes from the image too:
-`docker run --rm -i --entrypoint pouriya-www pouriya-www:latest hash`.
+`docker run --rm -i --entrypoint pouriya-www pouriya-www:latest hash-hex`.
 
 ## Code style conventions
 

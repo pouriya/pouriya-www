@@ -251,6 +251,25 @@ th.pick, td.pick { width: 2.5ch; padding-inline-end: 0; }
 td .find { cursor: pointer; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
 td .find:hover { color: var(--accent); text-decoration-color: currentColor; }
 tr.unread td { font-weight: 700; }
+/* Message cells keep each text's own direction but line up on the left, under
+   their headings, Persian or not. */
+tr.message td { unicode-bidi: plaintext; text-align: left; }
+th.seen, td.seen { width: 3.5ch; padding-inline: .25ch; text-align: center; }
+button.seen {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.5rem;
+  margin: 0 auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+button.seen svg { width: 18px; height: 18px; }
+tr.unread button.seen { color: var(--accent); }
+button.seen:hover { color: var(--fg); }
 tr.message { cursor: pointer; }
 tr.full td { white-space: normal; overflow: visible; max-width: none; background: var(--panel); padding: 0; cursor: auto; }
 /* The whole message, held to the visible width of its box however wide the
@@ -924,7 +943,8 @@ input[type="checkbox"] { margin: 0; accent-color: var(--fg); cursor: pointer; }
       noun: "messages",
       text: "name, text or reply contact",
       seen: true,
-      headings: ["Time", "Name", "Message", "Reply to", "Language", "IP", ""],
+      // The first is the read/unread envelope, put in by `message`.
+      headings: ["", "Time", "Name", "Message", "Reply to", "Language", "IP"],
       cells: function (record) {
         const reply = record.contact ? record.contact_kind + ": " + record.contact : "";
         return [time(record.at), record.name, record.text.split("\n")[0], reply, record.language,
@@ -950,6 +970,9 @@ input[type="checkbox"] { margin: 0; accent-color: var(--fg); cursor: pointer; }
       },
     },
   };
+
+  const ENVELOPE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M3 5.5h18v13H3z M3 6l9 7 9-7"/></svg>';
+  const OPEN_ENVELOPE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M3 10l9-6.5 9 6.5v9.5H3z M3 10l9 6.5 9-6.5"/></svg>';
 
   const template = document.getElementById("records");
   for (const name in RECORDS) {
@@ -1023,7 +1046,7 @@ input[type="checkbox"] { margin: 0; accent-color: var(--fg); cursor: pointer; }
       pickAll.append(all);
       head.append(pickAll);
       for (const heading of kind.headings) {
-        head.append(element("th", "", heading));
+        head.append(element("th", heading === "" ? "seen" : "", heading));
       }
       const thead = element("thead");
       thead.append(head);
@@ -1092,14 +1115,16 @@ input[type="checkbox"] { margin: 0; accent-color: var(--fg); cursor: pointer; }
     function message(record, line, tbody) {
       line.classList.add("message");
       line.classList.toggle("unread", record.seen === null);
-      for (const td of line.children) {
-        td.dir = "auto";
-      }
-      const toggle = element("button", "link", record.seen === null ? "mark read" : "mark unread");
+      // A closed envelope while unread, an open one once read; either way a
+      // click turns it over.
+      const toggle = element("button", "seen");
       toggle.type = "button";
-      const end = element("td");
-      end.append(toggle);
-      line.append(end);
+      toggle.title = record.seen === null ? "Unread · mark read" : "Read " + time(record.seen) + " · mark unread";
+      toggle.setAttribute("aria-label", record.seen === null ? "Mark read" : "Mark unread");
+      toggle.innerHTML = record.seen === null ? ENVELOPE : OPEN_ENVELOPE;
+      const cell = element("td", "seen");
+      cell.append(toggle);
+      line.children[0].after(cell);
       toggle.addEventListener("click", function (event) {
         event.stopPropagation();
         mark([record.id], record.seen === null);

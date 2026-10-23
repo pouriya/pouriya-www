@@ -173,9 +173,11 @@ struct CommandLine {
     #[arg(long, value_name = "PATH", required = true)]
     admin_path: Option<String>,
 
-    /// The admin password's argon2 hash, as printed by `pouriya-www hash`.
-    #[arg(long, value_name = "HASH", required = true)]
-    admin_hash: Option<String>,
+    /// The admin password's argon2 hash, hex-encoded so that no shell, quote
+    /// or deploy form can mangle its `$`s: what `pouriya-www hash-hex`
+    /// prints.
+    #[arg(long, value_name = "HEX", required = true)]
+    admin_hash_hex: Option<String>,
 
     /// Enable trace level logging (shows target and location).
     #[arg(long)]
@@ -193,15 +195,15 @@ struct CommandLine {
 #[derive(Debug, Subcommand)]
 enum Action {
     /// Read the admin password from stdin, one line, and print its argon2
-    /// hash for `--admin-hash`.
-    Hash,
+    /// hash, hex-encoded, for `--admin-hash-hex`.
+    HashHex,
 }
 
 struct App {
     www: PathBuf,
     /// `--url` without a trailing `/`.
     url: String,
-    /// `--admin-hash`, checked at startup to parse.
+    /// `--admin-hash-hex` decoded, checked at startup to parse.
     admin_hash: String,
     /// Admin sessions: token, last request. Each ends `ADMIN_SESSION_IDLE`
     /// after its last request, or at logout.
@@ -279,7 +281,7 @@ impl fmt::Display for Ulid {
 async fn main() -> anyhow::Result<()> {
     let settings = CommandLine::parse();
 
-    if let Some(Action::Hash) = settings.action {
+    if let Some(Action::HashHex) = settings.action {
         let mut password = String::new();
         std::io::stdin()
             .read_line(&mut password)
@@ -293,21 +295,21 @@ async fn main() -> anyhow::Result<()> {
             bail!("Could not read random bytes from the operating system: {error}");
         }
         match Argon2::default().hash_password_with_salt(password.as_bytes(), &salt) {
-            Ok(hash) => println!("{hash}"),
+            Ok(hash) => println!("{}", hex(hash.to_string().as_bytes())),
             Err(error) => bail!("Could not hash the password: {error}"),
         }
         return Ok(());
     }
     // Required by clap unless there is a subcommand, and there was none.
-    let (Some(www), Some(db), Some(given_url), Some(port), Some(admin_path), Some(admin_hash)) = (
+    let (Some(www), Some(db), Some(given_url), Some(port), Some(admin_path), Some(admin_hash_hex)) = (
         settings.www,
         settings.db,
         settings.url,
         settings.port,
         settings.admin_path,
-        settings.admin_hash,
+        settings.admin_hash_hex,
     ) else {
-        bail!("--www, --db, --url, --port, --admin-path and --admin-hash are all required");
+        bail!("--www, --db, --url, --port, --admin-path and --admin-hash-hex are all required");
     };
 
     let level = if settings.quiet {
@@ -373,8 +375,34 @@ async fn main() -> anyhow::Result<()> {
     if matches!(first, "software" | "contact" | "go" | "api") || www.join(first).exists() {
         bail!("--admin-path {admin_path} is taken by a page, the API or a file in --www");
     }
+    let digits = admin_hash_hex.as_bytes();
+    let mut decoded = Vec::with_capacity(digits.len() / 2);
+    for pair in digits.chunks(2) {
+        let mut byte = None;
+        if pair.len() == 2
+            && pair[0].is_ascii_hexdigit()
+            && pair[1].is_ascii_hexdigit()
+            && let Ok(text) = std::str::from_utf8(pair)
+            && let Ok(parsed) = u8::from_str_radix(text, 16)
+        {
+            byte = Some(parsed);
+        }
+        match byte {
+            Some(byte) => decoded.push(byte),
+            None => bail!(
+                "--admin-hash-hex must be hex digits only, an even number of them; make it with `pouriya-www hash-hex`"
+            ),
+        }
+    }
+    let Ok(admin_hash) = String::from_utf8(decoded) else {
+        bail!(
+            "--admin-hash-hex is not a hex-encoded argon2 hash; make it with `pouriya-www hash-hex`"
+        );
+    };
     if let Err(error) = PasswordHash::new(&admin_hash) {
-        bail!("--admin-hash is not an argon2 hash ({error}); make one with `pouriya-www hash`");
+        bail!(
+            "--admin-hash-hex is not a hex-encoded argon2 hash ({error}); make it with `pouriya-www hash-hex`"
+        );
     }
 
     let connection =
@@ -1203,7 +1231,7 @@ async fn message(
 
 #[derive(Deserialize)]
 struct LoginRequest {
-    /// Checked against `--admin-hash`.
+    /// Checked against `--admin-hash-hex`.
     password: String,
     /// The id from `GET /api/captcha`.
     captcha: String,
@@ -1250,10 +1278,7 @@ async fn login(
         tracing::error!(msg = "Could not make a session token", error = %error);
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
-    let mut token = String::with_capacity(64);
-    for byte in bytes {
-        token.push_str(&format!("{byte:02x}"));
-    }
+    let token = hex(&bytes);
     {
         let mut sessions = match app.sessions.lock() {
             Ok(sessions) => sessions,
@@ -2041,6 +2066,15 @@ fn client_ip(headers: &HeaderMap, socket: SocketAddr) -> IpAddr {
         Some(ip) => ip,
         None => socket.ip(),
     }
+}
+
+/// `bytes` as lowercase hex, two digits each.
+fn hex(bytes: &[u8]) -> String {
+    let mut text = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        text.push_str(&format!("{byte:02x}"));
+    }
+    text
 }
 
 /// A header's value as text, or `None` when absent or not visible ASCII.
