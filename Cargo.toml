@@ -1,6 +1,6 @@
 [package]
 name = "pouriya-www"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2024"
 description = "pouriya.net source code"
 authors = ["Pouriya Jahanbakhsh <pouriya.jahanbakhsh@gmail.com>"]
@@ -41,10 +41,15 @@ rusqlite = { version = "0.40.2", default-features = false, features = ["bundled"
 # `#[derive]` for the API bodies.
 serde = { version = "1.0.229", features = ["derive"] }
 
-# The 80 random bits of a ULID, straight from the OS.
+# The 80 random bits of a ULID, straight from the OS; also the salt of the
+# admin password hash and the admin session tokens.
 getrandom = "0.4.3"
 
-# The four required flags and the logging flags.
+# The admin password: `--admin-hash` is an argon2 PHC string, made by
+# `pouriya-www hash`. The salt comes from getrandom above, not its own RNG.
+argon2 = { version = "0.6.0", default-features = false, features = ["alloc", "password-hash"] }
+
+# The required flags, the logging flags and the `hash` subcommand.
 clap = { version = "4.6.7", default-features = false, features = [
     "std",
     "derive",

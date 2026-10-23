@@ -4,7 +4,8 @@ The source of pouriya.net. One binary serves a front end (`--www`) with
 `index.html`, `software.html` and `contact.html` filled in from settings in
 `src/main.rs`, counts who came and which links they followed, and keeps the
 messages sent from the contact page, in SQLite (`--db`). Nothing
-it counts is shown on the site. Plain HTTP on `--port`, meant to sit behind a
+it counts is shown on the site: only on the admin page at `--admin-path`,
+behind a password and a captcha. Plain HTTP on `--port`, meant to sit behind a
 reverse proxy that terminates TLS; `--url` is the address visitors use.
 
 ## ⚠️ Read this before writing any code
@@ -36,7 +37,7 @@ result; do not claim it passed without running it.
 | `make all` | **The gate**: `dev` + `clippy` + `test` + `check-style` |
 | `make dev` | Debug build → `build/pouriya-www-<version>-<target>-dev` |
 | `make release` | Release build → `build/pouriya-www-<version>-<target>` |
-| `make start-dev` | `dev`, then serves `www/` on `PORT` (8080) with `--debug`, database `pouriya-www.db`, `--url` from `URL` (`http://localhost:$PORT`) |
+| `make start-dev` | `dev`, then serves `www/` on `PORT` (8080) with `--debug`, database `pouriya-www.db`, `--url` from `URL` (`http://localhost:$PORT`), the admin page at `ADMIN_PATH` (`/dev-admin`) with password `ADMIN_PASSWORD` (`dev`) |
 | `make dist` | `build/dist/pouriya-www-<version>-<target>.tar.gz` (binary + `www/`) and its `.sha256` |
 | `make docker` | Alpine image `pouriya-www:<version>` and `pouriya-www:latest`, `www/` baked in |
 | `make clippy` | `cargo clippy --all-targets --no-deps -- -D warnings` |
@@ -61,6 +62,8 @@ www/            The front end, served as-is from --www
                 on every page. ASCII art on white, blended into the page
   contact.html  Template for /contact: Telegram, X, the email behind a captcha,
                 and a message form behind another. English and Persian
+  admin.html    The admin page, served as-is at --admin-path: login, then
+                Overview, Messages, Visits and Clicks. English only
   fonts/        Inconsolata (English) and Vazirmatn (Persian), woff2, each
                 with its OFL licence beside it
 Makefile        Every build/check entry point. Use it, not cargo.
@@ -81,16 +84,22 @@ as `const`s at the top of `src/main.rs`: `SITE_TITLE` (`pouriya.net`),
 `MESSAGE_WORD_LIMIT` (1000), `MESSAGE_CHARACTER_LIMIT` (5000),
 `MESSAGE_BYTE_LIMIT` (10000), `MESSAGE_CONTACT_LIMIT` (200),
 `MESSAGE_CONTACT_KINDS` (`phone`, `telegram`, `email`, `other`), `TEXT_LIMIT`,
-`ROBOT_MARKERS`.
+`ROBOT_MARKERS`, `ADMIN_SESSION_IDLE` (1 hour), `ADMIN_COOKIE`
+(`pouriya-www-admin`), `ADMIN_PAGE_SIZES` (20, 50, 100).
 What differs per machine comes from the command line, and every flag is
 mandatory with no default:
 
 ```
-pouriya-www --www DIR --db FILE --port PORT --url URL [--debug | --trace | --quiet]
+pouriya-www --www DIR --db FILE --port PORT --url URL --admin-path PATH --admin-hash HASH [--debug | --trace | --quiet]
+pouriya-www hash
 ```
 
 `--url` (`https://pouriya.net`) is where visitors reach the site: the
-canonical link and `og:url`.
+canonical link and `og:url`. `--admin-path` is where the admin page is served,
+a plain path of its own (letters, digits, `-_.~`, no trailing `/`) that no page,
+route or file in `--www` takes; it is never written in the source, the docs or
+any page. `--admin-hash` is the admin password's argon2 PHC string, printed by
+`pouriya-www hash` from one line of stdin; both are checked at startup.
 
 It binds `0.0.0.0:<port>`, so it works inside a container; on a host, keep the
 port firewalled so only the proxy reaches it.
@@ -100,7 +109,9 @@ port firewalled so only the proxy reaches it.
 `index.html` (`/`), `software.html` (`/software`) and `contact.html`
 (`/contact`) are read from disk on every request, so a front-end change is live
 on the next load. The last two are never served raw: `/software.html` and
-`/contact.html` are `404`. `{{name}}` is replaced, HTML-escaped, in one pass; unknown
+`/contact.html` are `404`. `admin.html` is read the same way but served as-is,
+nothing filled, at `--admin-path` only (`/admin.html` is `404`), with
+`Cache-Control: no-store`. `{{name}}` is replaced, HTML-escaped, in one pass; unknown
 names are left as written.
 
 | Name | Value |
@@ -141,6 +152,13 @@ is English only.
 | `GET /api/captcha` | `{id, image}`, a `data:image/png` URL; `429` + `Retry-After: 1` over the limit |
 | `POST /api/email` | `{captcha, answer}` → `{email}`, or `400 {error: "captcha"}` |
 | `POST /api/message` | `{name, text, contact_kind, contact, language, device?, captcha, answer}` → `204`, or `400 {error}` naming `name`, `text`, `contact` or `captcha` |
+| `GET <--admin-path>` | `www/admin.html` as-is |
+| `POST /api/admin/login` | `{password, captcha, answer}` → `204` + session cookie, or `400 {error}` naming `captcha` or `password` |
+| `POST /api/admin/logout` | Ends the session → `204` |
+| `POST /api/admin/overview` | `{from?, offset}` → totals, per-day counts, top paths, referrers and links |
+| `POST /api/admin/{visits,clicks,messages}` | `{filter, page, size}` → `{columns, total, rows}` |
+| `POST /api/admin/{visits,clicks,messages}/delete` | `{ids}` or `{filter}` → `{deleted}` |
+| `POST /api/admin/messages/seen` | `{ids, seen}` → `204` |
 | anything else | A file from `--www`, else `404` |
 
 Behind the proxy, the client address is the right-most entry of `Forwarded:
@@ -156,9 +174,9 @@ carries `X-Content-Type-Options: nosniff`.
 
 ```sql
 device (id BLOB PRIMARY KEY, created_at)          -- ULID, one per browser
-visit  (id, device, at, ip, user_agent, referrer, language, path)   -- every page open
+visit  (id, device, at, ip, referrer, language, path)   -- every page open
 click  (id, at, ip, link, page, device?, action)  -- every outbound link followed (open) or handle/email copied (copy)
-message (id, at, ip, device?, language, name, text, contact_kind, contact)  -- contact-page messages
+message (id, at, ip, device?, language, name, text, contact_kind, contact, seen?)  -- contact-page messages; seen = when marked read
 robot  (day, kind, dropped, PRIMARY KEY (day, kind))  -- refused robots, per UTC day
 ```
 
@@ -172,8 +190,11 @@ robot  (day, kind, dropped, PRIMARY KEY (day, kind))  -- refused robots, per UTC
   `referrer` (the page it came from) are the record of the move. Unique visitors are `device`
   rows. Strings from the client or its headers are clipped to `TEXT_LIMIT`
   characters.
-- **Nothing is shown publicly.** The numbers stay in SQLite; a private stats
-  page behind a login and a captcha is planned, not built.
+- **Nothing is shown publicly.** The numbers stay in SQLite and are seen only
+  on the admin page. The User-Agent is read to spot robots and never stored.
+  The schema is `CREATE TABLE IF NOT EXISTS` with no migrations: a change to
+  it comes with an `ALTER TABLE` run by hand on the production database
+  before the redeploy.
 - **Clicks**: every link to another site is `href="/go?to=URL"` with
   `target="_blank"`, written literally (not through `{{name}}`), because the
   pages are the allow-list: `/go` reads every `www/*.html` and refuses a `to` none of them
@@ -221,6 +242,38 @@ robot  (day, kind, dropped, PRIMARY KEY (day, kind))  -- refused robots, per UTC
 - Each email given out logs `Gave out the email` (`info`) with the client
   `ip`. It is not stored in the database.
 
+## Admin page
+
+- **Login** is the password and a captcha (the same `/api/captcha`), checked
+  captcha first so every password tried costs one. A success logs `Admin
+  logged in`, a wrong password `Refused admin login` (`warn`), both with `ip`.
+- **Sessions** are random 256-bit tokens held in memory, in an `HttpOnly;
+  Secure; SameSite=Strict` cookie scoped to `/api/admin`. Each ends after
+  `ADMIN_SESSION_IDLE` without a request, at logout, or on restart. Every
+  `/api/admin` route but login answers `401` without one, and all of them
+  `Cache-Control: no-store`.
+- **Nothing the admin does is counted**: the page sends no visit, and the API
+  records nothing. Visits to the public pages from the same browser still
+  count; nothing marks a device as the admin's.
+- **Layout**: a side menu (a hamburger on phones) with Overview, the default,
+  then Messages (unread count beside it), Visits and Clicks. The page never
+  scrolls; every table scrolls inside its own box under a sticky header.
+- **Overview**: Today, 7 days, 30 days or All, days in the browser's zone
+  (`offset`); totals, a per-day table and the top 10 paths, referrers and
+  links. Robots are kept per UTC day and shown that way. On phones the four
+  tables are one at a time.
+- **Messages, Visits, Clicks**: a search on top, a table, and a pager always in
+  view with the rows per page (`ADMIN_PAGE_SIZES`). The search is one line of
+  `Key:"value"` words, coloured as typed, with keys suggested, a time picker
+  for `From`/`To` and bad words marked: `From`, `To`, `Ip`, `Device`, `Text`
+  (inside the section's text columns), and `Seen:yes|no` on messages. A click
+  on an IP or device searches for it. Rows are deleted by checkbox (at most a
+  page, by id) or all that match the search (by filter, on the server,
+  however many). Deleting visits also deletes the devices left with none and
+  forgets them on clicks and messages. A message row is bold while unread,
+  opens its whole text in place on a click, and has a read/unread toggle;
+  selected rows can be marked together.
+
 ## Docker
 
 Built by `make docker` from base images pinned to exact versions —
@@ -236,10 +289,13 @@ only state: `VOLUME /var/lib/pouriya-www`. The runtime image carries the
 `docker exec -it <container> sqlite3 /var/lib/pouriya-www/pouriya-www.db`.
 
 ```
-docker run -d -p 8080:8080 -v pouriya-www:/var/lib/pouriya-www pouriya-www:latest --url https://pouriya.net
+docker run -d -p 8080:8080 -v pouriya-www:/var/lib/pouriya-www pouriya-www:latest \
+    --url https://pouriya.net --admin-path /<secret> --admin-hash '<hash>'
 ```
 
-`--url` is the one flag the image leaves to you: it goes after the image name.
+`--url`, `--admin-path` and `--admin-hash` are the flags the image leaves to
+you: they go after the image name. The hash comes from the image too:
+`docker run --rm -i --entrypoint pouriya-www pouriya-www:latest hash`.
 
 ## Code style conventions
 

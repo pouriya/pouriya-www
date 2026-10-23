@@ -1,0 +1,1480 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>pouriya · admin</title>
+<meta name="color-scheme" content="light dark">
+<style>
+@font-face {
+  font-family: "Inconsolata";
+  src: url("/fonts/Inconsolata-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inconsolata";
+  src: url("/fonts/Inconsolata-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("/fonts/Vazirmatn-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("/fonts/Vazirmatn-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  --bg: #fbfaf7;
+  --panel: #f3f1ec;
+  --fg: #1f1e1c;
+  --muted: #77736b;
+  --rule: #dcd8cf;
+  --accent: #a8461f;
+  --green: #0d8800;
+  --blue: #1f5fa8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151514;
+    --panel: #1c1c1a;
+    --fg: #e6e3dc;
+    --muted: #8d897f;
+    --rule: #33322f;
+    --accent: #e8915f;
+    --green: #4ade80;
+    --blue: #7fb2ef;
+  }
+}
+
+* { box-sizing: border-box; }
+/* The page never scrolls: every long list scrolls inside its own box. */
+html, body { height: 100%; margin: 0; overflow: hidden; }
+html { background: var(--bg); color: var(--fg); }
+body { font: 15px/1.5 "Inconsolata", "Vazirmatn", ui-monospace, monospace; }
+[hidden] { display: none !important; }
+h1, h2, h3 { margin: 0; font-size: inherit; font-weight: 700; }
+.muted { color: var(--muted); }
+.error { margin: .4rem 0 0; color: var(--accent); }
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.link:hover { color: var(--accent); text-decoration-color: currentColor; }
+.link:disabled { opacity: .4; cursor: default; color: inherit; }
+
+input[type="text"], input[type="password"], input[type="datetime-local"], select {
+  margin: 0;
+  padding: .35rem 1ch;
+  border: 1px solid var(--rule);
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+}
+input:focus, select:focus { outline: none; border-color: var(--fg); }
+select option { background: var(--bg); }
+
+button.primary, button.secondary {
+  padding: .35rem 2ch;
+  border: 1px solid var(--fg);
+  border-radius: 0;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+button.primary { background: var(--fg); color: var(--bg); }
+button.primary:hover { background: var(--green); border-color: var(--green); }
+button.secondary { background: transparent; color: var(--fg); font-weight: 400; }
+button.secondary:hover { color: var(--accent); border-color: var(--accent); }
+button.danger:hover { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+button:disabled, button:disabled:hover {
+  opacity: .4;
+  cursor: default;
+  background: transparent;
+  color: var(--fg);
+  border-color: var(--fg);
+}
+
+/* Login: one narrow column in the middle. */
+.login {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 1rem;
+  overflow: auto;
+}
+.login form { width: min(100%, 25rem); }
+.login h1 { margin-bottom: 1.5rem; }
+.field { margin-bottom: 1rem; }
+.field > label { display: block; color: var(--muted); margin-bottom: .3rem; }
+.field input { display: block; width: 100%; }
+.challenge { display: grid; grid-template-columns: auto 1fr; align-items: center; margin-bottom: .6rem; }
+.picture { display: block; width: 220px; height: 120px; mix-blend-mode: multiply; }
+@media (prefers-color-scheme: dark) {
+  .picture { filter: invert(1); mix-blend-mode: screen; }
+}
+.refresh {
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: none;
+  color: var(--fg);
+  cursor: pointer;
+}
+.refresh svg { width: 1.5rem; height: 1.5rem; }
+.refresh:hover { color: var(--accent); border-color: var(--accent); }
+#login-answer { letter-spacing: .2em; text-align: center; }
+.login button.primary { display: block; width: 100%; margin-top: 1.25rem; }
+
+/* The shell: the menu beside the open section, both the full height. */
+.shell { display: grid; grid-template-columns: 22ch minmax(0, 1fr); height: 100%; }
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.25rem 2ch;
+  border-inline-end: 1px solid var(--rule);
+  background: var(--bg);
+}
+.menu nav { display: flex; flex-direction: column; gap: .35rem; }
+.menu nav a {
+  display: flex;
+  justify-content: space-between;
+  padding: .3rem 1ch;
+  margin: 0 -1ch;
+  color: var(--muted);
+  text-decoration: none;
+}
+.menu nav a:hover { color: var(--accent); }
+.menu nav a.current { color: var(--fg); background: var(--panel); font-weight: 700; }
+.badge { color: var(--accent); font-weight: 700; }
+.menu .logout { margin-top: auto; align-self: flex-start; color: var(--muted); }
+.scrim { display: none; }
+
+main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 1.25rem 2.5ch 1rem;
+}
+.bar { display: flex; align-items: center; gap: 2ch; flex: none; margin-bottom: 1rem; }
+.hamburger {
+  display: none;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 1px solid var(--rule);
+  background: none;
+  color: var(--fg);
+  cursor: pointer;
+}
+.hamburger svg { width: 1.25rem; height: 1.25rem; }
+.status { margin-inline-start: auto; color: var(--muted); }
+.section { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: .9rem; }
+
+/* Words that pick one: the chosen one plain, the rest muted. */
+.choices { display: flex; flex-wrap: wrap; gap: .25rem 2.5ch; flex: none; }
+.choices button { padding: 0; border: 0; background: none; font: inherit; color: var(--muted); cursor: pointer; }
+.choices button:hover { color: var(--accent); }
+.choices button.current { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; }
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13ch, 1fr));
+  gap: 1px;
+  flex: none;
+  border: 1px solid var(--rule);
+  background: var(--rule);
+}
+.tile { padding: .6rem 1.5ch; background: var(--bg); }
+.tile .number { font-size: 1.6rem; font-weight: 700; line-height: 1.2; }
+.tile .label { color: var(--muted); }
+.tile .detail { color: var(--muted); font-size: .9em; }
+
+.grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: .9rem 2.5ch;
+}
+.panel { display: flex; flex-direction: column; min-height: 0; gap: .35rem; }
+.panel.days { grid-row: 1 / -1; }
+.panel h3 { flex: none; }
+.panes { display: none; }
+.panel h3 small { font-size: inherit; font-weight: 400; color: var(--muted); }
+
+/* A table in a box of its own: the box scrolls, its header stays. */
+.box { flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--rule); }
+table { width: 100%; border-collapse: collapse; }
+th, td {
+  padding: .3rem 1.25ch;
+  text-align: start;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 38ch;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+th { position: sticky; top: 0; z-index: 1; background: var(--panel); color: var(--muted); font-weight: 700; }
+td.number, th.number { text-align: end; font-variant-numeric: tabular-nums; }
+tbody tr:hover { background: var(--panel); }
+td.empty { color: var(--muted); text-align: center; padding: 2rem; max-width: none; }
+th.pick, td.pick { width: 2.5ch; padding-inline-end: 0; }
+td .find { cursor: pointer; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+td .find:hover { color: var(--accent); text-decoration-color: currentColor; }
+tr.unread td { font-weight: 700; }
+tr.message { cursor: pointer; }
+tr.full td { white-space: normal; overflow: visible; max-width: none; background: var(--panel); padding: 0; cursor: auto; }
+/* The whole message, held to the visible width of its box however wide the
+   table scrolls. */
+.whole { position: sticky; left: 0; padding: .75rem 2ch 1rem; }
+.text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 .6rem; font-weight: 400; }
+.meta { color: var(--muted); font-weight: 400; overflow-wrap: anywhere; }
+input[type="checkbox"] { margin: 0; accent-color: var(--fg); cursor: pointer; }
+
+/* The search: one line of Key:"value" words, coloured as typed. */
+.search { flex: none; display: flex; gap: 1ch; align-items: stretch; }
+.query { position: relative; flex: 1; min-width: 0; }
+.query input, .mirror {
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: .35rem 1ch;
+  border: 1px solid var(--rule);
+  font: inherit;
+  letter-spacing: normal;
+  white-space: pre;
+}
+.query input { position: relative; z-index: 1; background: transparent; color: transparent; caret-color: var(--fg); }
+.query input:focus { border-color: var(--fg); }
+.query input::placeholder { color: var(--muted); opacity: .7; }
+.query input::selection { background: color-mix(in srgb, var(--blue) 30%, transparent); color: transparent; }
+.mirror { position: absolute; inset: 0; overflow: hidden; color: var(--fg); border-color: transparent; }
+.mirror .key { color: var(--blue); }
+.mirror .colon { color: var(--muted); }
+.mirror .value { color: var(--green); }
+.mirror .bad { color: var(--accent); text-decoration: underline wavy; text-underline-offset: 4px; }
+.suggest {
+  position: absolute;
+  top: calc(100% + 2px);
+  inset-inline-start: 0;
+  z-index: 5;
+  min-width: 34ch;
+  max-width: 100%;
+  max-height: 18rem;
+  overflow: auto;
+  margin: 0;
+  padding: .25rem 0;
+  list-style: none;
+  border: 1px solid var(--fg);
+  background: var(--bg);
+}
+.suggest li { padding: .3rem 1.5ch; cursor: pointer; }
+.suggest li.active, .suggest li:hover { background: var(--panel); }
+.suggest li b { color: var(--blue); }
+.suggest li span { color: var(--muted); margin-inline-start: 1ch; }
+.suggest li.picker { cursor: default; background: none; }
+.suggest li.picker input { width: 100%; margin-top: .3rem; }
+.problems { flex: none; margin: -.5rem 0 0; color: var(--accent); }
+
+.tools { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 2.5ch; }
+.tools .count { font-weight: 700; }
+.tools .note { color: var(--muted); }
+
+.pager { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 2ch; }
+.pages { display: flex; flex-wrap: wrap; gap: .25rem; }
+.pages button {
+  min-width: 3.5ch;
+  padding: .15rem .8ch;
+  border: 1px solid var(--rule);
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+.pages button:hover { color: var(--accent); border-color: var(--accent); }
+.pages button.current { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.pages button:disabled { opacity: .35; cursor: default; color: var(--fg); border-color: var(--rule); }
+.pages .gap { padding: .15rem .5ch; color: var(--muted); }
+.size { display: flex; align-items: center; gap: 1ch; color: var(--muted); }
+.size select { padding: .15rem .8ch; }
+
+/* Phones: the menu slides in over the page from a button in the bar. */
+@media (max-width: 760px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .menu {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 20;
+    width: min(80vw, 28ch);
+    transform: translateX(-100%);
+    transition: transform .15s ease-out;
+  }
+  .shell.open .menu { transform: none; }
+  .shell.open .scrim { display: block; position: fixed; inset: 0; z-index: 10; background: rgb(0 0 0 / .45); }
+  .hamburger { display: inline-grid; }
+  main { padding: .9rem 1.25ch .75rem; }
+  .tile { padding: .4rem 1.5ch; }
+  .tile .number { font-size: 1.3rem; }
+  .panes { display: flex; }
+  .grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .panel { display: none; }
+  .panel.shown { display: flex; grid-row: auto; }
+  .panel h3 { display: none; }
+  .search { flex-wrap: wrap; }
+  .query { flex-basis: 100%; height: 2.25rem; }
+  .search button { flex: 1; }
+  .suggest { min-width: 0; width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<div class="login" id="login" hidden>
+  <form id="login-form" novalidate>
+    <h1>pouriya · admin</h1>
+    <div class="field">
+      <label for="login-password">Password</label>
+      <input id="login-password" type="password" autocomplete="current-password">
+    </div>
+    <div class="field">
+      <label for="login-answer">Type the characters in the picture</label>
+      <div class="challenge">
+        <img id="login-picture" class="picture" alt="" width="220" height="120">
+        <button class="refresh" type="button" id="login-refresh" aria-label="New picture">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg>
+        </button>
+      </div>
+      <input id="login-answer" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="5">
+    </div>
+    <p class="error" id="login-error" hidden></p>
+    <button class="primary" type="submit" id="login-submit">Log in</button>
+  </form>
+</div>
+
+<div class="shell" id="shell" hidden>
+  <aside class="menu" id="menu">
+    <h1>pouriya · admin</h1>
+    <nav>
+      <a href="#overview" data-section="overview">Overview</a>
+      <a href="#messages" data-section="messages">Messages <span class="badge" id="unread"></span></a>
+      <a href="#visits" data-section="visits">Visits</a>
+      <a href="#clicks" data-section="clicks">Clicks</a>
+    </nav>
+    <button class="link logout" type="button" id="logout">Log out</button>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+  <main>
+    <div class="bar">
+      <button class="hamburger" type="button" id="hamburger" aria-label="Menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <h2 id="title">Overview</h2>
+      <span class="status" id="status"></span>
+    </div>
+
+    <section class="section" id="overview" hidden>
+      <div class="choices" id="range">
+        <button type="button" data-days="1">Today</button>
+        <button type="button" data-days="7">7 days</button>
+        <button type="button" data-days="30">30 days</button>
+        <button type="button" data-days="0">All</button>
+      </div>
+      <div class="tiles" id="tiles"></div>
+      <!-- Phones: one of the four tables at a time, picked here. -->
+      <div class="choices panes" id="panes">
+        <button type="button" data-pane="days" class="current">Per day</button>
+        <button type="button" data-pane="paths">Paths</button>
+        <button type="button" data-pane="referrers">Referrers</button>
+        <button type="button" data-pane="links">Links</button>
+      </div>
+      <div class="grid">
+        <div class="panel days shown" data-pane="days">
+          <h3>Per day <small>· robots by UTC day</small></h3>
+          <div class="box"><table id="days"></table></div>
+        </div>
+        <div class="panel" data-pane="paths">
+          <h3>Paths</h3>
+          <div class="box"><table id="paths"></table></div>
+        </div>
+        <div class="panel" data-pane="referrers">
+          <h3>Referrers</h3>
+          <div class="box"><table id="referrers"></table></div>
+        </div>
+        <div class="panel" data-pane="links">
+          <h3>Links</h3>
+          <div class="box"><table id="links"></table></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- One of these per records section: Messages, Visits, Clicks. -->
+<template id="records">
+  <section class="section" hidden>
+    <div class="search">
+      <div class="query">
+        <div class="mirror" aria-hidden="true"></div>
+        <input type="text" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <ul class="suggest" hidden></ul>
+      </div>
+      <button class="primary" type="button" data-do="search">Search</button>
+      <button class="secondary" type="button" data-do="clear">Clear</button>
+    </div>
+    <p class="problems" hidden></p>
+    <div class="tools">
+      <span class="count"></span>
+      <button class="link" type="button" data-do="read" hidden>Mark read</button>
+      <button class="link" type="button" data-do="unread" hidden>Mark unread</button>
+      <button class="link" type="button" data-do="delete-selected">Delete selected</button>
+      <button class="link" type="button" data-do="delete-matching">Delete all matching</button>
+      <span class="note"></span>
+    </div>
+    <div class="box"><table></table></div>
+    <div class="pager">
+      <span class="shown muted"></span>
+      <div class="pages"></div>
+      <label class="size">Rows
+        <select>
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </label>
+    </div>
+  </section>
+</template>
+
+<script>
+  // Everything here comes from /api/admin, whose session cookie is sent to
+  // that path only. A 401 from any of it means the session is over: back to
+  // the login.
+  function api(path, body) {
+    return fetch("/api/admin/" + path, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
+    }).then(function (response) {
+      if (response.status === 401) {
+        showLogin();
+        throw new Error("Signed out");
+      }
+      return response;
+    });
+  }
+
+  function element(tag, className, text) {
+    const made = document.createElement(tag);
+    if (className) {
+      made.className = className;
+    }
+    if (text !== undefined && text !== null) {
+      made.textContent = text;
+    }
+    return made;
+  }
+
+  function pad(number) {
+    return String(number).padStart(2, "0");
+  }
+  function day(date) {
+    return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate());
+  }
+  function minute(date) {
+    return day(date) + " " + pad(date.getHours()) + ":" + pad(date.getMinutes());
+  }
+  function time(milliseconds) {
+    const date = new Date(milliseconds);
+    return minute(date) + ":" + pad(date.getSeconds());
+  }
+  function number(value) {
+    return Number(value).toLocaleString("en-US");
+  }
+
+  const status = document.getElementById("status");
+  function say(text) {
+    status.textContent = text;
+  }
+
+  // ---- Login ------------------------------------------------------------
+
+  const login = document.getElementById("login");
+  const shell = document.getElementById("shell");
+  const loginPicture = document.getElementById("login-picture");
+  const loginAnswer = document.getElementById("login-answer");
+  const loginError = document.getElementById("login-error");
+  let captchaId = null;
+
+  // The server gives one captcha per address per second, so a 429 is tried
+  // again a second later.
+  function newCaptcha() {
+    loginAnswer.value = "";
+    captchaId = null;
+    loginPicture.removeAttribute("src");
+    fetch("/api/captcha").then(function (response) {
+      if (response.status === 429) {
+        setTimeout(newCaptcha, 1000);
+        return null;
+      }
+      return response.status === 200 ? response.json() : null;
+    }).then(function (body) {
+      if (body) {
+        captchaId = body.id;
+        loginPicture.src = body.image;
+      }
+    }).catch(function () {});
+  }
+
+  function showLogin() {
+    if (!login.hidden) {
+      return;
+    }
+    shell.hidden = true;
+    login.hidden = false;
+    loginError.hidden = true;
+    document.getElementById("login-password").value = "";
+    newCaptcha();
+    document.getElementById("login-password").focus();
+  }
+
+  document.getElementById("login-refresh").addEventListener("click", newCaptcha);
+  document.getElementById("login-form").addEventListener("submit", function (event) {
+    event.preventDefault();
+    const password = document.getElementById("login-password");
+    if (password.value === "") {
+      password.focus();
+      return;
+    }
+    if (captchaId === null || loginAnswer.value.trim() === "") {
+      loginAnswer.focus();
+      return;
+    }
+    const submit = document.getElementById("login-submit");
+    submit.disabled = true;
+    fetch("/api/admin/login", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({password: password.value, captcha: captchaId, answer: loginAnswer.value}),
+    }).then(function (response) {
+      submit.disabled = false;
+      if (response.status === 204) {
+        password.value = "";
+        showShell();
+        return;
+      }
+      // A captcha is good for one try, right or wrong.
+      return (response.status === 400 ? response.json() : Promise.resolve({})).then(function (body) {
+        loginError.textContent = body.error === "password" ? "Wrong password."
+          : body.error === "captcha" ? "Wrong characters. Try this new picture."
+          : "Could not log in. Try again.";
+        loginError.hidden = false;
+        if (body.error === "password") {
+          password.select();
+        } else {
+          loginAnswer.focus();
+        }
+        newCaptcha();
+      });
+    }).catch(function () {
+      submit.disabled = false;
+      loginError.textContent = "Could not log in. Try again.";
+      loginError.hidden = false;
+    });
+  });
+
+  document.getElementById("logout").addEventListener("click", function () {
+    api("logout", {}).then(showLogin).catch(function () {});
+  });
+
+  // ---- Shell and menu ---------------------------------------------------
+
+  const titles = {overview: "Overview", messages: "Messages", visits: "Visits", clicks: "Clicks"};
+  const sections = {};
+  let current = null;
+
+  function showShell() {
+    login.hidden = true;
+    shell.hidden = false;
+    open(location.hash.slice(1));
+    unread();
+  }
+
+  function open(name) {
+    if (!titles[name]) {
+      name = "overview";
+    }
+    current = name;
+    if (location.hash !== "#" + name) {
+      history.replaceState(null, "", "#" + name);
+    }
+    document.getElementById("title").textContent = titles[name];
+    say("");
+    for (const link of document.querySelectorAll(".menu nav a")) {
+      link.classList.toggle("current", link.dataset.section === name);
+    }
+    document.getElementById("overview").hidden = name !== "overview";
+    for (const key in sections) {
+      sections[key].root.hidden = key !== name;
+    }
+    shell.classList.remove("open");
+    if (name === "overview") {
+      loadOverview();
+    } else {
+      sections[name].load();
+    }
+  }
+
+  window.addEventListener("hashchange", function () {
+    if (!shell.hidden) {
+      open(location.hash.slice(1));
+    }
+  });
+  document.getElementById("hamburger").addEventListener("click", function () {
+    shell.classList.add("open");
+  });
+  document.getElementById("scrim").addEventListener("click", function () {
+    shell.classList.remove("open");
+  });
+
+  // Unread messages of all time, beside Messages in the menu.
+  function unread() {
+    api("messages", {filter: {seen: false}, page: 1, size: 20}).then(function (response) {
+      return response.json();
+    }).then(function (body) {
+      document.getElementById("unread").textContent = body.total ? number(body.total) : "";
+    }).catch(function () {});
+  }
+
+  // ---- Overview ---------------------------------------------------------
+
+  let rangeDays = 7;
+
+  function table(target, headings, rows, numeric) {
+    target.replaceChildren();
+    const head = element("tr");
+    headings.forEach(function (heading, index) {
+      head.append(element("th", numeric[index] ? "number" : "", heading));
+    });
+    const thead = element("thead");
+    thead.append(head);
+    const tbody = element("tbody");
+    for (const row of rows) {
+      const line = element("tr");
+      row.forEach(function (cell, index) {
+        const td = element("td", numeric[index] ? "number" : "", numeric[index] ? number(cell) : cell);
+        td.title = String(cell);
+        line.append(td);
+      });
+      tbody.append(line);
+    }
+    if (rows.length === 0) {
+      const line = element("tr");
+      const td = element("td", "empty", "Nothing yet.");
+      td.colSpan = headings.length;
+      line.append(td);
+      tbody.append(line);
+    }
+    target.append(thead, tbody);
+  }
+
+  function loadOverview() {
+    for (const button of document.querySelectorAll("#range button")) {
+      button.classList.toggle("current", Number(button.dataset.days) === rangeDays);
+    }
+    let from = null;
+    if (rangeDays > 0) {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      start.setDate(start.getDate() - (rangeDays - 1));
+      from = start.getTime();
+    }
+    say("Loading…");
+    api("overview", {from: from, offset: -new Date().getTimezoneOffset()}).then(function (response) {
+      return response.json();
+    }).then(function (body) {
+      say("");
+      let robots = 0;
+      const kinds = [];
+      for (const [kind, dropped] of body.robots) {
+        robots += dropped;
+        kinds.push(kind + " " + number(dropped));
+      }
+      const tiles = document.getElementById("tiles");
+      tiles.replaceChildren();
+      for (const [label, value, detail] of [
+        ["visits", body.visits],
+        ["devices", body.devices],
+        ["new devices", body.new_devices],
+        ["clicks", body.clicks],
+        ["messages", body.messages, body.unread ? number(body.unread) + " unread" : ""],
+        ["robots", robots, kinds.join(" · ")],
+      ]) {
+        const tile = element("div", "tile");
+        tile.append(element("div", "number", number(value)), element("div", "label", label));
+        if (detail) {
+          tile.append(element("div", "detail", detail));
+        }
+        tiles.append(tile);
+      }
+      const days = [];
+      for (const row of body.days) {
+        days.push([row.day, row.visits, row.devices, row.new_devices, row.clicks, row.messages, row.robots]);
+      }
+      table(document.getElementById("days"),
+        ["Day", "Visits", "Devices", "New", "Clicks", "Messages", "Robots"],
+        days, [false, true, true, true, true, true, true]);
+      table(document.getElementById("paths"), ["Path", "Visits"], body.paths, [false, true]);
+      table(document.getElementById("referrers"), ["Referrer", "Visits"], body.referrers, [false, true]);
+      table(document.getElementById("links"), ["Link", "Opened", "Copied"], body.links, [false, true, true]);
+    }).catch(function (error) {
+      if (error.message !== "Signed out") {
+        say("Could not load.");
+      }
+    });
+  }
+
+  for (const button of document.querySelectorAll("#panes button")) {
+    button.addEventListener("click", function () {
+      for (const other of document.querySelectorAll("#panes button")) {
+        other.classList.toggle("current", other === button);
+      }
+      for (const panel of document.querySelectorAll(".panel")) {
+        panel.classList.toggle("shown", panel.dataset.pane === button.dataset.pane);
+      }
+    });
+  }
+
+  for (const button of document.querySelectorAll("#range button")) {
+    button.addEventListener("click", function () {
+      rangeDays = Number(button.dataset.days);
+      loadOverview();
+    });
+  }
+
+  // ---- The search: Key:"value" words -------------------------------------
+
+  // `query` cut into words at spaces outside quotes, each with where it sits.
+  function words(query) {
+    const found = [];
+    let index = 0;
+    while (index < query.length) {
+      if (/\s/.test(query[index])) {
+        index += 1;
+        continue;
+      }
+      const start = index;
+      let quoted = false;
+      while (index < query.length && (quoted || !/\s/.test(query[index]))) {
+        if (query[index] === '"') {
+          quoted = !quoted;
+        }
+        index += 1;
+      }
+      found.push({start: start, end: index, raw: query.slice(start, index)});
+    }
+    return found;
+  }
+
+  // "2026-10-01" or "2026-10-01 13:45", in this browser's zone. `end` gives
+  // the first millisecond after it, so To: takes in the whole day or minute.
+  function moment(text, end) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?$/.exec(text);
+    if (!match) {
+      return null;
+    }
+    const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]),
+      Number(match[4] || 0), Number(match[5] || 0));
+    if (isNaN(date.getTime()) || date.getMonth() !== Number(match[2]) - 1) {
+      return null;
+    }
+    if (end) {
+      if (match[4] === undefined) {
+        date.setDate(date.getDate() + 1);
+      } else {
+        date.setMinutes(date.getMinutes() + 1);
+      }
+    }
+    return date.getTime();
+  }
+
+  // Every word of `query` read against `keys`: the filter it asks for, and
+  // what is wrong with which word.
+  function parse(query, keys) {
+    const filter = {};
+    const problems = [];
+    const parts = [];
+    const used = {};
+    for (const word of words(query)) {
+      const colon = word.raw.indexOf(":");
+      const part = {word: word, colon: colon, bad: null};
+      parts.push(part);
+      if (colon <= 0) {
+        part.bad = "Write Key:value, one of " + Object.keys(keys).join(", ");
+        continue;
+      }
+      let name = null;
+      for (const key in keys) {
+        if (key.toLowerCase() === word.raw.slice(0, colon).toLowerCase()) {
+          name = key;
+        }
+      }
+      let value = word.raw.slice(colon + 1);
+      if (value.startsWith('"')) {
+        value = value.endsWith('"') && value.length > 1 ? value.slice(1, -1) : value.slice(1);
+      }
+      value = value.trim();
+      if (name === null) {
+        part.bad = "No key " + word.raw.slice(0, colon) + "; there is " + Object.keys(keys).join(", ");
+        continue;
+      }
+      if (used[name]) {
+        part.bad = name + " is already given";
+        continue;
+      }
+      used[name] = true;
+      const key = keys[name];
+      if (value === "") {
+        part.bad = name + " needs a value";
+      } else if (key.type === "time") {
+        const at = moment(value, name === "To");
+        if (at === null) {
+          part.bad = name + " is a time like 2026-10-01 or 2026-10-01 13:45";
+        } else {
+          filter[key.field] = at;
+        }
+      } else if (key.type === "choice") {
+        if (key.values[value.toLowerCase()] === undefined) {
+          part.bad = name + " is " + Object.keys(key.values).join(" or ");
+        } else {
+          filter[key.field] = key.values[value.toLowerCase()];
+        }
+      } else if (key.type === "device" && !/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/i.test(value)) {
+        part.bad = "Device is a 26-character id";
+      } else {
+        filter[key.field] = value;
+      }
+      if (part.bad) {
+        problems.push(part.bad);
+      }
+    }
+    for (const part of parts) {
+      if (part.bad && problems.indexOf(part.bad) < 0) {
+        problems.push(part.bad);
+      }
+    }
+    return {filter: filter, problems: problems, parts: parts};
+  }
+
+  // The coloured copy of the query that sits under its transparent input.
+  function paint(mirror, query, parts) {
+    mirror.replaceChildren();
+    let at = 0;
+    for (const part of parts) {
+      const word = part.word;
+      mirror.append(document.createTextNode(query.slice(at, word.start)));
+      if (part.bad || part.colon <= 0) {
+        mirror.append(element("span", part.bad ? "bad" : "", word.raw));
+      } else {
+        mirror.append(
+          element("span", "key", word.raw.slice(0, part.colon)),
+          element("span", "colon", ":"),
+          element("span", "value", word.raw.slice(part.colon + 1)));
+      }
+      at = word.end;
+    }
+    mirror.append(document.createTextNode(query.slice(at) + " "));
+  }
+
+  // ---- Records: Messages, Visits, Clicks ---------------------------------
+
+  // `cells(record)` gives each row's cells after its checkbox: text, or
+  // {text, find} for one that adds itself to the search when clicked.
+  const RECORDS = {
+    messages: {
+      noun: "messages",
+      text: "name, text or reply contact",
+      seen: true,
+      headings: ["Time", "Name", "Message", "Reply to", "Language", "IP", ""],
+      cells: function (record) {
+        const reply = record.contact ? record.contact_kind + ": " + record.contact : "";
+        return [time(record.at), record.name, record.text.split("\n")[0], reply, record.language,
+          {text: record.ip, find: "Ip"}];
+      },
+    },
+    visits: {
+      noun: "visits",
+      text: "path, referrer or language",
+      headings: ["Time", "IP", "Path", "Referrer", "Language", "Device"],
+      cells: function (record) {
+        return [time(record.at), {text: record.ip, find: "Ip"}, record.path, record.referrer,
+          record.language, {text: record.device, find: "Device"}];
+      },
+    },
+    clicks: {
+      noun: "clicks",
+      text: "link or page",
+      headings: ["Time", "IP", "Action", "Link", "Page", "Device"],
+      cells: function (record) {
+        return [time(record.at), {text: record.ip, find: "Ip"}, record.action, record.link,
+          record.page, record.device ? {text: record.device, find: "Device"} : ""];
+      },
+    },
+  };
+
+  const template = document.getElementById("records");
+  for (const name in RECORDS) {
+    const kind = RECORDS[name];
+    const root = template.content.firstElementChild.cloneNode(true);
+    document.querySelector("main").append(root);
+    const input = root.querySelector(".query input");
+    const mirror = root.querySelector(".mirror");
+    const suggest = root.querySelector(".suggest");
+    const problems = root.querySelector(".problems");
+    const box = root.querySelector(".box");
+    const grid = root.querySelector("table");
+    const size = root.querySelector(".size select");
+    const note = root.querySelector(".note");
+    const keys = {
+      From: {type: "time", field: "from", hint: "on or after this time"},
+      To: {type: "time", field: "to", hint: "on or before this time"},
+      Ip: {type: "text", field: "ip", hint: "exactly this address"},
+      Device: {type: "device", field: "device", hint: "exactly this device id"},
+      Text: {type: "text", field: "text", hint: "inside " + kind.text},
+    };
+    if (kind.seen) {
+      keys.Seen = {type: "choice", field: "seen", values: {yes: true, no: false}, hint: "read or unread"};
+    }
+    input.placeholder = 'Ip:"1.2.3.4" From:"' + day(new Date()) + '" Text:"…"';
+    const state = {filter: {}, query: "", page: 1, size: 20, total: 0, selected: new Set(), ids: []};
+
+    function select() {
+      const count = state.selected.size;
+      root.querySelector('[data-do="delete-selected"]').disabled = count === 0;
+      root.querySelector('[data-do="delete-selected"]').textContent = count ? "Delete " + count + " selected" : "Delete selected";
+      root.querySelector('[data-do="read"]').disabled = count === 0;
+      root.querySelector('[data-do="unread"]').disabled = count === 0;
+      root.querySelector('[data-do="delete-matching"]').disabled = state.total === 0;
+      const all = grid.querySelector("th input");
+      if (all) {
+        all.checked = count > 0 && count === state.ids.length;
+        all.indeterminate = count > 0 && count < state.ids.length;
+      }
+    }
+
+    // Puts `Key:"value"` in the search, in place of any word with that key,
+    // and searches: a click on an IP or a device.
+    function find(key, value) {
+      const kept = [];
+      for (const word of words(input.value)) {
+        if (!word.raw.toLowerCase().startsWith(key.toLowerCase() + ":")) {
+          kept.push(word.raw);
+        }
+      }
+      kept.push(key + ':"' + value + '"');
+      input.value = kept.join(" ");
+      search();
+    }
+
+    function render(body) {
+      state.total = body.total;
+      state.ids = [];
+      state.selected.clear();
+      const head = element("tr");
+      const pickAll = element("th", "pick");
+      const all = element("input");
+      all.type = "checkbox";
+      all.title = "Select this page";
+      all.addEventListener("change", function () {
+        for (const box of grid.querySelectorAll("td.pick input")) {
+          box.checked = all.checked;
+          box.dispatchEvent(new Event("change"));
+        }
+      });
+      pickAll.append(all);
+      head.append(pickAll);
+      for (const heading of kind.headings) {
+        head.append(element("th", "", heading));
+      }
+      const thead = element("thead");
+      thead.append(head);
+      const tbody = element("tbody");
+      for (const row of body.rows) {
+        const record = {};
+        body.columns.forEach(function (column, index) {
+          record[column] = row[index];
+        });
+        state.ids.push(record.id);
+        const line = element("tr");
+        const pick = element("td", "pick");
+        const box = element("input");
+        box.type = "checkbox";
+        box.addEventListener("change", function () {
+          if (box.checked) {
+            state.selected.add(record.id);
+          } else {
+            state.selected.delete(record.id);
+          }
+          select();
+        });
+        pick.append(box);
+        line.append(pick);
+        for (const cell of kind.cells(record)) {
+          const td = element("td");
+          if (cell && cell.find) {
+            const span = element("span", "find", cell.text);
+            span.title = "Search " + cell.find + " " + cell.text;
+            span.addEventListener("click", function (event) {
+              event.stopPropagation();
+              find(cell.find, cell.text);
+            });
+            td.append(span);
+          } else {
+            td.textContent = cell;
+            td.title = cell;
+          }
+          line.append(td);
+        }
+        tbody.append(line);
+        if (name === "messages") {
+          message(record, line, tbody);
+        }
+      }
+      if (body.rows.length === 0) {
+        const line = element("tr");
+        const td = element("td", "empty", state.query ? "Nothing matches." : "Nothing yet.");
+        td.colSpan = kind.headings.length + 1;
+        line.append(td);
+        tbody.append(line);
+      }
+      grid.replaceChildren(thead, tbody);
+      box.scrollTop = 0;
+
+      root.querySelector(".count").textContent = number(body.total) + (body.total === 1 ? " match" : " matches");
+      const first = body.total === 0 ? 0 : (state.page - 1) * state.size + 1;
+      const last = Math.min(body.total, state.page * state.size);
+      root.querySelector(".shown").textContent = number(first) + "–" + number(last) + " of " + number(body.total);
+      pages();
+      select();
+    }
+
+    // A message's row: bold while unread, its whole text below it on a
+    // click, and a toggle at its end.
+    function message(record, line, tbody) {
+      line.classList.add("message");
+      line.classList.toggle("unread", record.seen === null);
+      for (const td of line.children) {
+        td.dir = "auto";
+      }
+      const toggle = element("button", "link", record.seen === null ? "mark read" : "mark unread");
+      toggle.type = "button";
+      const end = element("td");
+      end.append(toggle);
+      line.append(end);
+      toggle.addEventListener("click", function (event) {
+        event.stopPropagation();
+        mark([record.id], record.seen === null);
+      });
+      let full = null;
+      line.addEventListener("click", function (event) {
+        if (event.target.closest("td.pick")) {
+          return;
+        }
+        if (full) {
+          full.remove();
+          full = null;
+          return;
+        }
+        full = element("tr", "full");
+        const td = element("td");
+        td.colSpan = kind.headings.length + 1;
+        const text = element("p", "text", record.text);
+        text.dir = "auto";
+        const meta = [];
+        if (record.contact) {
+          meta.push("reply to " + record.contact_kind + ": " + record.contact);
+        }
+        meta.push("language " + record.language, "ip " + record.ip);
+        if (record.device) {
+          meta.push("device " + record.device);
+        }
+        meta.push(record.seen === null ? "unread" : "read " + time(record.seen));
+        const details = element("div", "meta", meta.join(" · "));
+        details.dir = "auto";
+        const whole = element("div", "whole");
+        whole.style.width = box.clientWidth + "px";
+        whole.append(text, details);
+        td.append(whole);
+        full.append(td);
+        line.after(full);
+      });
+    }
+
+    function mark(ids, seen) {
+      api("messages/seen", {ids: ids, seen: seen}).then(function (response) {
+        if (response.status !== 204) {
+          throw new Error("Could not mark");
+        }
+        unread();
+        load();
+      }).catch(function (error) {
+        if (error.message !== "Signed out") {
+          say("Could not mark.");
+        }
+      });
+    }
+
+    // Page numbers: the first, the last, and two either side of this one.
+    function pages() {
+      const holder = root.querySelector(".pages");
+      holder.replaceChildren();
+      const count = Math.max(1, Math.ceil(state.total / state.size));
+      function button(label, page, disabled, currentPage) {
+        const made = element("button", currentPage ? "current" : "", label);
+        made.type = "button";
+        made.disabled = disabled;
+        made.addEventListener("click", function () {
+          state.page = page;
+          load();
+        });
+        holder.append(made);
+      }
+      button("‹", state.page - 1, state.page <= 1, false);
+      let previous = 0;
+      for (let page = 1; page <= count; page += 1) {
+        if (page === 1 || page === count || Math.abs(page - state.page) <= 2) {
+          if (page - previous > 1) {
+            holder.append(element("span", "gap", "…"));
+          }
+          button(String(page), page, false, page === state.page);
+          previous = page;
+        }
+      }
+      button("›", state.page + 1, state.page >= count, false);
+    }
+
+    function load() {
+      say("Loading…");
+      api(name, {filter: state.filter, page: state.page, size: state.size}).then(function (response) {
+        if (response.status !== 200) {
+          throw new Error("Could not load");
+        }
+        return response.json();
+      }).then(function (body) {
+        say("");
+        // Deleting can leave this page past the last one.
+        const count = Math.max(1, Math.ceil(body.total / state.size));
+        if (state.page > count) {
+          state.page = count;
+          load();
+          return;
+        }
+        render(body);
+      }).catch(function (error) {
+        if (error.message !== "Signed out") {
+          say("Could not load.");
+        }
+      });
+    }
+
+    function search() {
+      const parsed = parse(input.value, keys);
+      paint(mirror, input.value, parsed.parts);
+      problems.textContent = parsed.problems.join(". ");
+      problems.hidden = parsed.problems.length === 0;
+      closeSuggest();
+      if (parsed.problems.length) {
+        return;
+      }
+      state.filter = parsed.filter;
+      state.query = input.value.trim();
+      state.page = 1;
+      note.textContent = "";
+      load();
+    }
+
+    function remove(body, question) {
+      if (!confirm(question)) {
+        return;
+      }
+      api(name + "/delete", body).then(function (response) {
+        if (response.status !== 200) {
+          throw new Error("Could not delete");
+        }
+        return response.json();
+      }).then(function (result) {
+        note.textContent = "Deleted " + number(result.deleted) + ".";
+        if (name === "messages") {
+          unread();
+        }
+        load();
+      }).catch(function (error) {
+        if (error.message !== "Signed out") {
+          say("Could not delete.");
+        }
+      });
+    }
+
+    root.querySelector('[data-do="search"]').addEventListener("click", search);
+    root.querySelector('[data-do="clear"]').addEventListener("click", function () {
+      input.value = "";
+      search();
+    });
+    root.querySelector('[data-do="delete-selected"]').addEventListener("click", function () {
+      const ids = Array.from(state.selected);
+      remove({ids: ids}, "Delete " + ids.length + " selected " + kind.noun + "? This cannot be undone.");
+    });
+    root.querySelector('[data-do="delete-matching"]').addEventListener("click", function () {
+      remove({filter: state.filter}, "Delete all " + number(state.total) + " " + kind.noun + " matching "
+        + (state.query ? state.query : "(everything)") + "? This cannot be undone.");
+    });
+    if (kind.seen) {
+      root.querySelector('[data-do="read"]').hidden = false;
+      root.querySelector('[data-do="unread"]').hidden = false;
+      root.querySelector('[data-do="read"]').addEventListener("click", function () {
+        mark(Array.from(state.selected), true);
+      });
+      root.querySelector('[data-do="unread"]').addEventListener("click", function () {
+        mark(Array.from(state.selected), false);
+      });
+    }
+    size.addEventListener("change", function () {
+      state.size = Number(size.value);
+      state.page = 1;
+      load();
+    });
+
+    // Suggestions under the search: keys while a key is typed, then the
+    // values of a key that has a few, or a picker for a time.
+    let options = [];
+    let active = -1;
+
+    function closeSuggest() {
+      suggest.hidden = true;
+      options = [];
+      active = -1;
+    }
+
+    // The word the caret is in, or a new one where it stands.
+    function here() {
+      const caret = input.selectionStart;
+      for (const word of words(input.value)) {
+        if (word.start <= caret && caret <= word.end) {
+          return word;
+        }
+      }
+      return {start: caret, end: caret, raw: ""};
+    }
+
+    function replace(word, text, caret) {
+      input.value = input.value.slice(0, word.start) + text + input.value.slice(word.end);
+      input.focus();
+      input.setSelectionRange(word.start + caret, word.start + caret);
+      typed();
+    }
+
+    function suggestions() {
+      const word = here();
+      const caret = input.selectionStart - word.start;
+      const colon = word.raw.indexOf(":");
+      const list = [];
+      if (colon < 0 || caret <= colon) {
+        const typedKey = word.raw.slice(0, colon < 0 ? caret : colon).toLowerCase();
+        const used = {};
+        for (const other of words(input.value)) {
+          if (other.start !== word.start) {
+            used[other.raw.split(":")[0].toLowerCase()] = true;
+          }
+        }
+        for (const name in keys) {
+          if (!used[name.toLowerCase()] && name.toLowerCase().startsWith(typedKey)) {
+            list.push({label: name, hint: keys[name].hint, auto: typedKey !== "", pick: function () {
+              const key = keys[name];
+              if (key.type === "choice") {
+                replace(word, name + ":", name.length + 1);
+              } else if (key.type === "time") {
+                const value = name === "From" ? day(new Date()) + " 00:00" : minute(new Date());
+                replace(word, name + ':"' + value + '"', name.length + 2 + value.length);
+              } else {
+                replace(word, name + ':""', name.length + 2);
+              }
+            }});
+          }
+        }
+        return list;
+      }
+      let name = null;
+      for (const key in keys) {
+        if (key.toLowerCase() === word.raw.slice(0, colon).toLowerCase()) {
+          name = key;
+        }
+      }
+      if (name === null) {
+        return list;
+      }
+      const key = keys[name];
+      if (key.type === "choice") {
+        const typedValue = word.raw.slice(colon + 1).replace(/"/g, "").toLowerCase();
+        for (const value in key.values) {
+          if (value.startsWith(typedValue)) {
+            list.push({label: value, hint: key.hint, auto: typedValue !== "", pick: function () {
+              replace(word, name + ":" + value + " ", name.length + value.length + 2);
+            }});
+          }
+        }
+      } else if (key.type === "time") {
+        list.push({picker: true, name: name, word: word});
+      }
+      return list;
+    }
+
+    function showSuggest() {
+      options = suggestions();
+      suggest.replaceChildren();
+      if (options.length === 0) {
+        suggest.hidden = true;
+        return;
+      }
+      if (active >= options.length) {
+        active = options.length - 1;
+      }
+      // Something typed towards a key or value: Enter or Tab finishes it.
+      if (active < 0 && options[0].auto) {
+        active = 0;
+      }
+      options.forEach(function (option, index) {
+        const item = element("li", index === active ? "active" : "");
+        if (option.picker) {
+          item.className = "picker";
+          item.append(element("span", "", "Pick a time, or type one like 2026-10-01 13:45"));
+          const picker = element("input");
+          picker.type = "datetime-local";
+          const value = option.word.raw.slice(option.name.length + 1).replace(/"/g, "");
+          const at = moment(value, false);
+          if (at !== null) {
+            picker.value = minute(new Date(at)).replace(" ", "T");
+          }
+          picker.addEventListener("change", function () {
+            if (picker.value) {
+              const text = picker.value.replace("T", " ");
+              replace(option.word, option.name + ':"' + text + '" ', option.name.length + text.length + 4);
+            }
+          });
+          item.append(picker);
+        } else {
+          item.append(element("b", "", option.label), element("span", "", option.hint));
+          // Keeps the caret in the input instead of moving focus here.
+          item.addEventListener("mousedown", function (event) {
+            event.preventDefault();
+          });
+          item.addEventListener("click", option.pick);
+        }
+        suggest.append(item);
+      });
+      suggest.hidden = false;
+    }
+
+    // As the query changes: recolour it, and offer what fits the caret.
+    function typed() {
+      paint(mirror, input.value, parse(input.value, keys).parts);
+      mirror.scrollLeft = input.scrollLeft;
+      active = -1;
+      showSuggest();
+    }
+
+    input.addEventListener("input", typed);
+    input.addEventListener("click", showSuggest);
+    input.addEventListener("focus", showSuggest);
+    input.addEventListener("scroll", function () {
+      mirror.scrollLeft = input.scrollLeft;
+    });
+    input.addEventListener("keyup", function (event) {
+      mirror.scrollLeft = input.scrollLeft;
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight" || event.key === "Home" || event.key === "End") {
+        showSuggest();
+      }
+    });
+    input.addEventListener("blur", function () {
+      // Leaving for the time picker inside the list keeps it open.
+      setTimeout(function () {
+        if (!suggest.contains(document.activeElement) && document.activeElement !== input) {
+          closeSuggest();
+        }
+      }, 150);
+    });
+    input.addEventListener("keydown", function (event) {
+      const choosable = options.length > 0 && !options[0].picker && !suggest.hidden;
+      if (event.key === "ArrowDown" && choosable) {
+        event.preventDefault();
+        active = (active + 1) % options.length;
+        showSuggest();
+      } else if (event.key === "ArrowUp" && choosable) {
+        event.preventDefault();
+        active = active <= 0 ? options.length - 1 : active - 1;
+        showSuggest();
+      } else if ((event.key === "Enter" || event.key === "Tab") && choosable && active >= 0) {
+        event.preventDefault();
+        options[active].pick();
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        search();
+      } else if (event.key === "Escape") {
+        closeSuggest();
+      }
+    });
+
+    sections[name] = {root: root, load: load};
+    select();
+  }
+
+  for (const link of document.querySelectorAll(".menu nav a")) {
+    link.addEventListener("click", function (event) {
+      event.preventDefault();
+      if (link.dataset.section === current) {
+        shell.classList.remove("open");
+        open(current);
+      } else {
+        location.hash = link.dataset.section;
+      }
+    });
+  }
+
+  // Signed in already? Any admin call answers 401 if not.
+  api("messages", {filter: {seen: false}, page: 1, size: 20}).then(function (response) {
+    if (response.status === 200) {
+      showShell();
+    }
+  }).catch(function () {});
+</script>
+
+</body>
+</html>

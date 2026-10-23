@@ -5,11 +5,13 @@
 //! SQLite (`--db`): one row per device, one per page open, one per link
 //! followed to another site or handle copied, one per message sent from the
 //! contact page, and a per-day counter of robots turned away. None of it
-//! is shown on the site. The contact email is never written into the page; it
-//! is handed out only for a solved captcha, and a message needs one too.
+//! is shown on the site: only on the admin page, at `--admin-path`, behind
+//! a password and a captcha. The contact email is never written into the
+//! page; it is handed out only for a solved captcha, and a message needs one
+//! too.
 
 use std::{
-    collections::VecDeque,
+    collections::{BTreeMap, VecDeque},
     fmt,
     fmt::Write,
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -19,6 +21,7 @@ use std::{
 };
 
 use anyhow::{Context, bail};
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::{
     Json, Router,
     extract::{ConnectInfo, MatchedPath, Query, Request, State},
@@ -27,8 +30,11 @@ use axum::{
     response::{Html, IntoResponse, Response},
     routing::{get, post},
 };
-use clap::Parser;
-use rusqlite::{Connection, OptionalExtension, params};
+use clap::{Parser, Subcommand};
+use rusqlite::{
+    Connection, OptionalExtension, params, params_from_iter,
+    types::{Value, ValueRef},
+};
 use serde::{Deserialize, Serialize};
 use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer};
 use tracing_subscriber::{filter::LevelFilter, fmt as subscriber};
@@ -83,9 +89,20 @@ const MESSAGE_CONTACT_LIMIT: usize = 200;
 const MESSAGE_CONTACT_KINDS: [&str; 4] = ["phone", "telegram", "email", "other"];
 
 /// Longest header or client-sent string kept in a `visit` row, in characters.
-/// A User-Agent is rarely over 300; this only stops a hostile one filling the
+/// A referrer is rarely over 300; this only stops a hostile one filling the
 /// disk.
 const TEXT_LIMIT: usize = 512;
+
+/// An admin session ends after this long without a request. Sessions are held
+/// in memory only, so a restart ends them all.
+const ADMIN_SESSION_IDLE: Duration = Duration::from_secs(3600);
+
+/// The cookie holding the admin session token, sent to `/api/admin` only.
+const ADMIN_COOKIE: &str = "pouriya-www-admin";
+
+/// Rows per page the admin page may ask for, smallest first. The largest is
+/// also the most ids one request may delete or mark.
+const ADMIN_PAGE_SIZES: [usize; 3] = [20, 50, 100];
 
 /// Lowercase User-Agent fragments that mark a robot. Cheap and incomplete on
 /// purpose: a browser-faking crawler gets through this, but almost none of
@@ -122,26 +139,43 @@ const ROBOT_MARKERS: [&str; 22] = [
 /// terminates TLS; the client address is read from `Forwarded`,
 /// `X-Forwarded-For` or `X-Real-IP`, in that order.
 #[derive(Debug, Parser)]
-#[command(version, author)]
+#[command(
+    version,
+    author,
+    args_conflicts_with_subcommands = true,
+    subcommand_negates_reqs = true
+)]
 struct CommandLine {
-    /// The front end: `index.html`, `software.html`, `contact.html` and every
-    /// file they link to, served as-is.
-    #[arg(long, value_name = "DIRECTORY")]
-    www: PathBuf,
+    #[command(subcommand)]
+    action: Option<Action>,
+
+    /// The front end: `index.html`, `software.html`, `contact.html`,
+    /// `admin.html` and every file they link to, served as-is.
+    #[arg(long, value_name = "DIRECTORY", required = true)]
+    www: Option<PathBuf>,
 
     /// SQLite database for devices, visits, clicks, messages and robot
     /// counters. Created if missing.
-    #[arg(long, value_name = "FILE")]
-    db: PathBuf,
+    #[arg(long, value_name = "FILE", required = true)]
+    db: Option<PathBuf>,
 
     /// Where visitors reach the site, like `https://pouriya.net`: the
     /// canonical link and the link-preview URL.
-    #[arg(long, value_name = "URL")]
-    url: String,
+    #[arg(long, value_name = "URL", required = true)]
+    url: Option<String>,
 
     /// TCP port to listen on, on every interface.
-    #[arg(long)]
-    port: u16,
+    #[arg(long, required = true)]
+    port: Option<u16>,
+
+    /// Where the admin page is served, like `/some-unguessable-word`. Nothing
+    /// links to it; its API is under `/api/admin`.
+    #[arg(long, value_name = "PATH", required = true)]
+    admin_path: Option<String>,
+
+    /// The admin password's argon2 hash, as printed by `pouriya-www hash`.
+    #[arg(long, value_name = "HASH", required = true)]
+    admin_hash: Option<String>,
 
     /// Enable trace level logging (shows target and location).
     #[arg(long)]
@@ -156,10 +190,22 @@ struct CommandLine {
     quiet: bool,
 }
 
+#[derive(Debug, Subcommand)]
+enum Action {
+    /// Read the admin password from stdin, one line, and print its argon2
+    /// hash for `--admin-hash`.
+    Hash,
+}
+
 struct App {
     www: PathBuf,
     /// `--url` without a trailing `/`.
     url: String,
+    /// `--admin-hash`, checked at startup to parse.
+    admin_hash: String,
+    /// Admin sessions: token, last request. Each ends `ADMIN_SESSION_IDLE`
+    /// after its last request, or at logout.
+    sessions: Mutex<Vec<(String, Instant)>>,
     database: Mutex<Connection>,
     /// Captchas shown and not yet answered: id, answer, when made. At most
     /// `CAPTCHA_LIMIT`, oldest first; each is good for `CAPTCHA_LIFETIME` and
@@ -233,6 +279,37 @@ impl fmt::Display for Ulid {
 async fn main() -> anyhow::Result<()> {
     let settings = CommandLine::parse();
 
+    if let Some(Action::Hash) = settings.action {
+        let mut password = String::new();
+        std::io::stdin()
+            .read_line(&mut password)
+            .context("Could not read the password from stdin")?;
+        let password = password.trim_end_matches(['\r', '\n']);
+        if password.is_empty() {
+            bail!("No password on stdin");
+        }
+        let mut salt = [0u8; 16];
+        if let Err(error) = getrandom::fill(&mut salt) {
+            bail!("Could not read random bytes from the operating system: {error}");
+        }
+        match Argon2::default().hash_password_with_salt(password.as_bytes(), &salt) {
+            Ok(hash) => println!("{hash}"),
+            Err(error) => bail!("Could not hash the password: {error}"),
+        }
+        return Ok(());
+    }
+    // Required by clap unless there is a subcommand, and there was none.
+    let (Some(www), Some(db), Some(given_url), Some(port), Some(admin_path), Some(admin_hash)) = (
+        settings.www,
+        settings.db,
+        settings.url,
+        settings.port,
+        settings.admin_path,
+        settings.admin_hash,
+    ) else {
+        bail!("--www, --db, --url, --port, --admin-path and --admin-hash are all required");
+    };
+
     let level = if settings.quiet {
         LevelFilter::OFF
     } else if settings.trace {
@@ -260,25 +337,48 @@ async fn main() -> anyhow::Result<()> {
 
     // Checked once here so that a typo'd path fails at startup, naming the
     // flag, rather than as a 500 on the first visitor.
-    for file in ["index.html", "software.html", "contact.html"] {
-        if !settings.www.join(file).is_file() {
+    for file in ["index.html", "software.html", "contact.html", "admin.html"] {
+        if !www.join(file).is_file() {
             bail!(
                 "--www {} has no {file}; it must be the front-end directory",
-                settings.www.display()
+                www.display()
             );
         }
     }
-    let url = settings.url.trim_end_matches('/').to_string();
+    let url = given_url.trim_end_matches('/').to_string();
     match url.split_once("://") {
         Some(("http" | "https", rest)) if !rest.is_empty() => {}
-        _ => bail!(
-            "--url {} must start with http:// or https:// and name a host",
-            settings.url
-        ),
+        _ => bail!("--url {given_url} must start with http:// or https:// and name a host"),
+    }
+    // A plain path of its own: nothing a route pattern would read as a
+    // parameter, and no page, API or front-end file already there.
+    let mut plain = admin_path.len() > 1
+        && admin_path.starts_with('/')
+        && !admin_path.ends_with('/')
+        && !admin_path.contains("//");
+    for character in admin_path.chars() {
+        if !(character.is_ascii_alphanumeric() || "/-_.~".contains(character)) {
+            plain = false;
+        }
+    }
+    if !plain {
+        bail!(
+            "--admin-path {admin_path} must be a path like /some-word: letters, digits and - _ . ~, no trailing /"
+        );
+    }
+    let first = match admin_path[1..].split_once('/') {
+        Some((first, _)) => first,
+        None => &admin_path[1..],
+    };
+    if matches!(first, "software" | "contact" | "go" | "api") || www.join(first).exists() {
+        bail!("--admin-path {admin_path} is taken by a page, the API or a file in --www");
+    }
+    if let Err(error) = PasswordHash::new(&admin_hash) {
+        bail!("--admin-hash is not an argon2 hash ({error}); make one with `pouriya-www hash`");
     }
 
-    let connection = Connection::open(&settings.db)
-        .with_context(|| format!("Could not open --db {}", settings.db.display()))?;
+    let connection =
+        Connection::open(&db).with_context(|| format!("Could not open --db {}", db.display()))?;
     connection.busy_timeout(Duration::from_secs(30))?;
     connection
         .execute_batch(
@@ -298,7 +398,6 @@ async fn main() -> anyhow::Result<()> {
                  device BLOB NOT NULL REFERENCES device (id),
                  at INTEGER NOT NULL,
                  ip TEXT NOT NULL,
-                 user_agent TEXT NOT NULL,
                  referrer TEXT NOT NULL,
                  language TEXT NOT NULL,
                  path TEXT NOT NULL
@@ -323,7 +422,8 @@ async fn main() -> anyhow::Result<()> {
 
              -- One row per message sent from the contact page with a solved
              -- captcha. `language` is the page's, `en` or `fa`, to reply in.
-             -- `contact_kind` is empty when no way to reply was given.
+             -- `contact_kind` is empty when no way to reply was given. `seen`
+             -- is when the admin marked it read, NULL while unread.
              CREATE TABLE IF NOT EXISTS message (
                  id INTEGER PRIMARY KEY,
                  at INTEGER NOT NULL,
@@ -333,7 +433,8 @@ async fn main() -> anyhow::Result<()> {
                  name TEXT NOT NULL,
                  text TEXT NOT NULL,
                  contact_kind TEXT NOT NULL,
-                 contact TEXT NOT NULL
+                 contact TEXT NOT NULL,
+                 seen INTEGER
              );
 
              -- Requests refused as robots, counted per UTC day and per kind:
@@ -346,11 +447,13 @@ async fn main() -> anyhow::Result<()> {
                  PRIMARY KEY (day, kind)
              ) WITHOUT ROWID;",
         )
-        .with_context(|| format!("Could not set up the schema in {}", settings.db.display()))?;
+        .with_context(|| format!("Could not set up the schema in {}", db.display()))?;
 
     let app = Arc::new(App {
-        www: settings.www.clone(),
+        www: www.clone(),
         url,
+        admin_hash,
+        sessions: Mutex::new(Vec::new()),
         database: Mutex::new(connection),
         captchas: Mutex::new(VecDeque::new()),
         recent: Mutex::new(Vec::new()),
@@ -384,13 +487,78 @@ async fn main() -> anyhow::Result<()> {
         // Served filled in at their own paths only, never raw by the fallback.
         .route("/software.html", get(|| async { StatusCode::NOT_FOUND }))
         .route("/contact.html", get(|| async { StatusCode::NOT_FOUND }))
+        .route("/admin.html", get(|| async { StatusCode::NOT_FOUND }))
+        // The admin page, as-is: no fields to fill, no visit, no robot count.
+        // Without a session it shows only the login, and everything it shows
+        // after comes from /api/admin.
+        .route(
+            &admin_path,
+            get(|State(app): State<Arc<App>>| async move {
+                match tokio::fs::read_to_string(app.www.join("admin.html")).await {
+                    Ok(html) => ([(header::CACHE_CONTROL, "no-store")], Html(html)).into_response(),
+                    Err(error) => {
+                        tracing::error!(msg = "Could not read page", file = "admin.html", www = ?app.www, error = %error);
+                        StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                    }
+                }
+            }),
+        )
         .route("/go", get(go))
         .route("/api/visit", post(visit))
         .route("/api/captcha", get(captcha))
         .route("/api/email", post(email))
         .route("/api/message", post(message))
         .route("/api/click", post(click))
-        .fallback_service(ServeDir::new(&settings.www))
+        .nest(
+            "/api/admin",
+            Router::new()
+                .route("/login", post(login))
+                .route("/logout", post(logout))
+                .route("/overview", post(overview))
+                .route(
+                    "/visits",
+                    post(|State(app): State<Arc<App>>, headers: HeaderMap, Json(body): Json<SearchRequest>| {
+                        search(app, headers, &VISITS, body)
+                    }),
+                )
+                .route(
+                    "/visits/delete",
+                    post(|State(app): State<Arc<App>>, headers: HeaderMap, Json(body): Json<DeleteRequest>| {
+                        delete(app, headers, &VISITS, body)
+                    }),
+                )
+                .route(
+                    "/clicks",
+                    post(|State(app): State<Arc<App>>, headers: HeaderMap, Json(body): Json<SearchRequest>| {
+                        search(app, headers, &CLICKS, body)
+                    }),
+                )
+                .route(
+                    "/clicks/delete",
+                    post(|State(app): State<Arc<App>>, headers: HeaderMap, Json(body): Json<DeleteRequest>| {
+                        delete(app, headers, &CLICKS, body)
+                    }),
+                )
+                .route(
+                    "/messages",
+                    post(|State(app): State<Arc<App>>, headers: HeaderMap, Json(body): Json<SearchRequest>| {
+                        search(app, headers, &MESSAGES, body)
+                    }),
+                )
+                .route(
+                    "/messages/delete",
+                    post(|State(app): State<Arc<App>>, headers: HeaderMap, Json(body): Json<DeleteRequest>| {
+                        delete(app, headers, &MESSAGES, body)
+                    }),
+                )
+                .route("/messages/seen", post(seen))
+                // Nothing the admin sees is worth a copy in any cache.
+                .layer(SetResponseHeaderLayer::overriding(
+                    header::CACHE_CONTROL,
+                    HeaderValue::from_static("no-store"),
+                )),
+        )
+        .fallback_service(ServeDir::new(&www))
         // Revalidate everything: ServeDir answers with Last-Modified, so an
         // unchanged file costs a 304, and a changed one shows up on the next
         // load without any cache-busting in the front end.
@@ -405,15 +573,15 @@ async fn main() -> anyhow::Result<()> {
         .layer(middleware::from_fn(access_log))
         .with_state(app);
 
-    let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), settings.port);
+    let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
     let listener = tokio::net::TcpListener::bind(address)
         .await
         .with_context(|| format!("Could not listen on {address}"))?;
     tracing::info!(
         msg = "Listening",
         address = %address,
-        www = ?settings.www,
-        db = ?settings.db,
+        www = ?www,
+        db = ?db,
     );
     axum::serve(
         listener,
@@ -543,10 +711,6 @@ async fn visit(
 
     let ip = client_ip(&headers, socket);
 
-    let user_agent = match header_text(&headers, "user-agent") {
-        Some(agent) => clip(&agent),
-        None => String::new(),
-    };
     let language = match header_text(&headers, "accept-language") {
         Some(language) => clip(&language),
         None => String::new(),
@@ -591,13 +755,12 @@ async fn visit(
             }
         };
         transaction.execute(
-            "INSERT INTO visit (device, at, ip, user_agent, referrer, language, path)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO visit (device, at, ip, referrer, language, path)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 &device.0[..],
                 now(),
                 ip.to_string(),
-                user_agent,
                 referrer,
                 language,
                 path
@@ -909,8 +1072,9 @@ struct EmailResponse {
 
 #[derive(Serialize)]
 struct FieldError {
-    /// Which field to fix: `captcha` (wrong, expired or already tried), or for
-    /// a message `name`, `text` or `contact`.
+    /// Which field to fix: `captcha` (wrong, expired or already tried), for a
+    /// message `name`, `text` or `contact`, for the admin login `password`,
+    /// and for an admin search `device`.
     error: &'static str,
 }
 
@@ -1032,6 +1196,658 @@ async fn message(
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
         Err(error) => {
             tracing::error!(msg = "Could not store message", error = %format!("{error:#}"));
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct LoginRequest {
+    /// Checked against `--admin-hash`.
+    password: String,
+    /// The id from `GET /api/captcha`.
+    captcha: String,
+    /// What the admin read in its picture.
+    answer: String,
+}
+
+/// `POST /api/admin/login`: the password and a solved captcha for a session
+/// cookie, `204`. The captcha is checked first, so every password tried costs
+/// one; `400 {error}` names `captcha` or `password`.
+async fn login(
+    State(app): State<Arc<App>>,
+    ConnectInfo(socket): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    Json(body): Json<LoginRequest>,
+) -> Response {
+    let refuse = |field: &'static str| {
+        (StatusCode::BAD_REQUEST, Json(FieldError { error: field })).into_response()
+    };
+    if !solved(&app, &body.captcha, &body.answer) {
+        return refuse("captcha");
+    }
+    let ip = client_ip(&headers, socket);
+    let hash = app.admin_hash.clone();
+    // Argon2 is slow on purpose: kept off the async threads.
+    let checked = tokio::task::spawn_blocking(move || {
+        Argon2::default().verify_password(body.password.as_bytes(), hash.as_str())
+    })
+    .await;
+    match checked {
+        Ok(Ok(())) => {}
+        Ok(Err(_)) => {
+            tracing::warn!(msg = "Refused admin login", ip = %ip);
+            return refuse("password");
+        }
+        Err(error) => {
+            tracing::error!(msg = "Password check panicked", error = %error);
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    }
+
+    let mut bytes = [0u8; 32];
+    if let Err(error) = getrandom::fill(&mut bytes) {
+        tracing::error!(msg = "Could not make a session token", error = %error);
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    let mut token = String::with_capacity(64);
+    for byte in bytes {
+        token.push_str(&format!("{byte:02x}"));
+    }
+    {
+        let mut sessions = match app.sessions.lock() {
+            Ok(sessions) => sessions,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let started = Instant::now();
+        sessions.retain(|(_, at)| started.duration_since(*at) < ADMIN_SESSION_IDLE);
+        sessions.push((token.clone(), started));
+    }
+    tracing::info!(msg = "Admin logged in", ip = %ip);
+    let cookie =
+        format!("{ADMIN_COOKIE}={token}; Path=/api/admin; HttpOnly; Secure; SameSite=Strict");
+    (StatusCode::NO_CONTENT, [(header::SET_COOKIE, cookie)]).into_response()
+}
+
+/// `POST /api/admin/logout`: ends the session, if any, and clears its cookie.
+async fn logout(State(app): State<Arc<App>>, headers: HeaderMap) -> Response {
+    if let Some(token) = signed_in(&app, &headers) {
+        let mut sessions = match app.sessions.lock() {
+            Ok(sessions) => sessions,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        sessions.retain(|(open, _)| *open != token);
+    }
+    let cookie =
+        format!("{ADMIN_COOKIE}=; Path=/api/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=0");
+    (StatusCode::NO_CONTENT, [(header::SET_COOKIE, cookie)]).into_response()
+}
+
+/// The token of the open admin session this request's cookie names, whose
+/// idle time starts over; `None` without one.
+fn signed_in(app: &App, headers: &HeaderMap) -> Option<String> {
+    let mut token = None;
+    for value in headers.get_all(header::COOKIE) {
+        let Ok(text) = value.to_str() else {
+            continue;
+        };
+        for pair in text.split(';') {
+            if let Some((name, value)) = pair.trim().split_once('=')
+                && name == ADMIN_COOKIE
+            {
+                token = Some(value.to_string());
+            }
+        }
+    }
+    let token = token?;
+    let mut sessions = match app.sessions.lock() {
+        Ok(sessions) => sessions,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    let checked = Instant::now();
+    sessions.retain(|(_, at)| checked.duration_since(*at) < ADMIN_SESSION_IDLE);
+    let mut found = false;
+    for (open, at) in sessions.iter_mut() {
+        // Every byte compared, so the time taken says nothing about how many
+        // matched.
+        let mut difference = u8::from(open.len() != token.len());
+        for (left, right) in open.bytes().zip(token.bytes()) {
+            difference |= left ^ right;
+        }
+        if difference == 0 {
+            *at = checked;
+            found = true;
+        }
+    }
+    if found { Some(token) } else { None }
+}
+
+#[derive(Deserialize)]
+struct OverviewRequest {
+    /// Unix milliseconds the range starts at, the browser's midnight; none
+    /// for everything.
+    from: Option<i64>,
+    /// The browser's offset from UTC in minutes, east positive: the days
+    /// below are its days.
+    offset: i64,
+}
+
+#[derive(Serialize)]
+struct OverviewResponse {
+    visits: i64,
+    devices: i64,
+    new_devices: i64,
+    clicks: i64,
+    messages: i64,
+    /// Unread among `messages`.
+    unread: i64,
+    /// Unread messages of all time.
+    unread_all: i64,
+    /// `[kind, dropped]`, over UTC days from the one `from` falls in.
+    robots: Vec<(String, i64)>,
+    /// Newest first.
+    days: Vec<Day>,
+    /// The ten most opened, `[path, visits]`.
+    paths: Vec<(String, i64)>,
+    /// The ten most common, `[referrer, visits]`.
+    referrers: Vec<(String, i64)>,
+    /// The ten most clicked, `[link, opened, copied]`.
+    links: Vec<(String, i64, i64)>,
+}
+
+#[derive(Serialize)]
+struct Day {
+    /// `YYYY-MM-DD` in the browser's zone.
+    day: String,
+    visits: i64,
+    devices: i64,
+    new_devices: i64,
+    clicks: i64,
+    messages: i64,
+    /// By UTC day, as the `robot` table keeps them.
+    robots: i64,
+}
+
+/// `POST /api/admin/overview`: totals, per-day counts and the most common
+/// paths, referrers and links since `from`.
+async fn overview(
+    State(app): State<Arc<App>>,
+    headers: HeaderMap,
+    Json(body): Json<OverviewRequest>,
+) -> Response {
+    if signed_in(&app, &headers).is_none() {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let from = body.from.unwrap_or_default();
+    let shift = body.offset.clamp(-14 * 60, 14 * 60) * 60_000;
+    let result = database(&app, move |connection| {
+        let pairs = |sql: &str| -> rusqlite::Result<Vec<(String, i64)>> {
+            let mut statement = connection.prepare(sql)?;
+            let mut rows = statement.query([from])?;
+            let mut pairs = Vec::new();
+            while let Some(row) = rows.next()? {
+                pairs.push((row.get(0)?, row.get(1)?));
+            }
+            Ok(pairs)
+        };
+        let (visits, devices) = connection.query_row(
+            "SELECT count(*), count(DISTINCT device) FROM visit WHERE at >= ?1",
+            [from],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        let new_devices = connection.query_row(
+            "SELECT count(*) FROM device WHERE created_at >= ?1",
+            [from],
+            |row| row.get(0),
+        )?;
+        let clicks =
+            connection.query_row("SELECT count(*) FROM click WHERE at >= ?1", [from], |row| {
+                row.get(0)
+            })?;
+        let (messages, unread) = connection.query_row(
+            "SELECT count(*), count(*) - count(seen) FROM message WHERE at >= ?1",
+            [from],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        let unread_all = connection.query_row(
+            "SELECT count(*) FROM message WHERE seen IS NULL",
+            [],
+            |row| row.get(0),
+        )?;
+        let robots = pairs(
+            "SELECT kind, sum(dropped) FROM robot WHERE day >= date(?1 / 1000, 'unixepoch')
+             GROUP BY kind ORDER BY kind",
+        )?;
+
+        // Per day, `[visits, devices, new devices, clicks, messages, robots]`;
+        // each query fills its own columns, from `first` on.
+        let mut days: BTreeMap<String, [i64; 6]> = BTreeMap::new();
+        for (sql, first) in [
+            (
+                "SELECT date((at + ?2) / 1000, 'unixepoch') AS day, count(*), count(DISTINCT device)
+                 FROM visit WHERE at >= ?1 GROUP BY day",
+                0,
+            ),
+            (
+                "SELECT date((created_at + ?2) / 1000, 'unixepoch') AS day, count(*)
+                 FROM device WHERE created_at >= ?1 GROUP BY day",
+                2,
+            ),
+            (
+                "SELECT date((at + ?2) / 1000, 'unixepoch') AS day, count(*)
+                 FROM click WHERE at >= ?1 GROUP BY day",
+                3,
+            ),
+            (
+                "SELECT date((at + ?2) / 1000, 'unixepoch') AS day, count(*)
+                 FROM message WHERE at >= ?1 GROUP BY day",
+                4,
+            ),
+        ] {
+            let mut statement = connection.prepare(sql)?;
+            let counts = statement.column_count() - 1;
+            let mut rows = statement.query([from, shift])?;
+            while let Some(row) = rows.next()? {
+                let day: String = row.get(0)?;
+                let entry = days.entry(day).or_insert([0; 6]);
+                for index in 0..counts {
+                    entry[first + index] = row.get(index + 1)?;
+                }
+            }
+        }
+        for (day, dropped) in pairs(
+            "SELECT day, sum(dropped) FROM robot WHERE day >= date(?1 / 1000, 'unixepoch')
+             GROUP BY day",
+        )? {
+            days.entry(day).or_insert([0; 6])[5] = dropped;
+        }
+        let mut newest_first = Vec::new();
+        for (day, counts) in days.into_iter().rev() {
+            newest_first.push(Day {
+                day,
+                visits: counts[0],
+                devices: counts[1],
+                new_devices: counts[2],
+                clicks: counts[3],
+                messages: counts[4],
+                robots: counts[5],
+            });
+        }
+
+        let paths = pairs(
+            "SELECT path, count(*) AS n FROM visit WHERE at >= ?1
+             GROUP BY path ORDER BY n DESC, path LIMIT 10",
+        )?;
+        let referrers = pairs(
+            "SELECT referrer, count(*) AS n FROM visit WHERE at >= ?1 AND referrer != ''
+             GROUP BY referrer ORDER BY n DESC, referrer LIMIT 10",
+        )?;
+        let mut links = Vec::new();
+        let mut statement = connection.prepare(
+            "SELECT link, sum(action = 'open'), sum(action = 'copy') FROM click WHERE at >= ?1
+             GROUP BY link ORDER BY count(*) DESC, link LIMIT 10",
+        )?;
+        let mut rows = statement.query([from])?;
+        while let Some(row) = rows.next()? {
+            links.push((row.get(0)?, row.get(1)?, row.get(2)?));
+        }
+
+        Ok(OverviewResponse {
+            visits,
+            devices,
+            new_devices,
+            clicks,
+            messages,
+            unread,
+            unread_all,
+            robots,
+            days: newest_first,
+            paths,
+            referrers,
+            links,
+        })
+    })
+    .await;
+    match result {
+        Ok(overview) => Json(overview).into_response(),
+        Err(error) => {
+            tracing::error!(msg = "Could not count for the overview", error = %format!("{error:#}"));
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+/// A table the admin page lists, searches and deletes from.
+struct Records {
+    table: &'static str,
+    /// Sent in this order, `device` as its ULID.
+    columns: &'static [&'static str],
+    /// What a search's `text` looks inside.
+    text: &'static [&'static str],
+}
+
+static VISITS: Records = Records {
+    table: "visit",
+    columns: &["id", "at", "ip", "device", "path", "referrer", "language"],
+    text: &["path", "referrer", "language"],
+};
+
+static CLICKS: Records = Records {
+    table: "click",
+    columns: &["id", "at", "ip", "action", "link", "page", "device"],
+    text: &["link", "page"],
+};
+
+static MESSAGES: Records = Records {
+    table: "message",
+    columns: &[
+        "id",
+        "at",
+        "ip",
+        "name",
+        "text",
+        "contact_kind",
+        "contact",
+        "language",
+        "device",
+        "seen",
+    ],
+    text: &["name", "text", "contact"],
+};
+
+/// What an admin search or delete matches; every field given must hold.
+#[derive(Deserialize)]
+struct Filter {
+    /// Unix milliseconds, inclusive.
+    from: Option<i64>,
+    /// Unix milliseconds, exclusive.
+    to: Option<i64>,
+    /// Exactly this client address.
+    ip: Option<String>,
+    /// Exactly this device ULID.
+    device: Option<String>,
+    /// Inside any of the table's text columns, ignoring ASCII case.
+    text: Option<String>,
+    /// Messages only: read (`true`) or unread (`false`).
+    seen: Option<bool>,
+}
+
+/// `filter` as a `WHERE` clause over `records` and its values in order, or
+/// the field it cannot read.
+fn conditions(records: &Records, filter: &Filter) -> Result<(String, Vec<Value>), &'static str> {
+    let mut clauses = Vec::new();
+    let mut values = Vec::new();
+    if let Some(from) = filter.from {
+        clauses.push("at >= ?".to_string());
+        values.push(Value::Integer(from));
+    }
+    if let Some(to) = filter.to {
+        clauses.push("at < ?".to_string());
+        values.push(Value::Integer(to));
+    }
+    if let Some(ip) = &filter.ip {
+        clauses.push("ip = ?".to_string());
+        values.push(Value::Text(ip.trim().to_string()));
+    }
+    if let Some(device) = &filter.device {
+        match Ulid::parse(device.trim()) {
+            Some(device) => {
+                clauses.push("device = ?".to_string());
+                values.push(Value::Blob(device.0.to_vec()));
+            }
+            None => return Err("device"),
+        }
+    }
+    if let Some(text) = &filter.text
+        && !text.is_empty()
+    {
+        let mut any = Vec::new();
+        for column in records.text {
+            any.push(format!("instr(lower({column}), lower(?)) > 0"));
+            values.push(Value::Text(text.clone()));
+        }
+        clauses.push(format!("({})", any.join(" OR ")));
+    }
+    if let Some(seen) = filter.seen
+        && records.table == "message"
+    {
+        clauses.push(
+            if seen {
+                "seen IS NOT NULL"
+            } else {
+                "seen IS NULL"
+            }
+            .to_string(),
+        );
+    }
+    if clauses.is_empty() {
+        return Ok(("1".to_string(), values));
+    }
+    Ok((clauses.join(" AND "), values))
+}
+
+#[derive(Deserialize)]
+struct SearchRequest {
+    filter: Filter,
+    /// From 1.
+    page: usize,
+    /// One of `ADMIN_PAGE_SIZES`.
+    size: usize,
+}
+
+#[derive(Serialize)]
+struct SearchResponse {
+    columns: &'static [&'static str],
+    /// Rows the filter matches, all pages.
+    total: i64,
+    /// This page of them, newest first, each in `columns` order.
+    rows: Vec<Vec<Cell>>,
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum Cell {
+    Null,
+    Integer(i64),
+    Text(String),
+}
+
+/// `POST /api/admin/{visits,clicks,messages}`: one page of what `filter`
+/// matches, newest first, and how many it matches in all.
+async fn search(
+    app: Arc<App>,
+    headers: HeaderMap,
+    records: &'static Records,
+    body: SearchRequest,
+) -> Response {
+    if signed_in(&app, &headers).is_none() {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    if body.page == 0 || !ADMIN_PAGE_SIZES.contains(&body.size) {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    let (clause, values) = match conditions(records, &body.filter) {
+        Ok(found) => found,
+        Err(field) => {
+            return (StatusCode::BAD_REQUEST, Json(FieldError { error: field })).into_response();
+        }
+    };
+    let size = body.size;
+    let offset = (body.page - 1).saturating_mul(size);
+    let result = database(&app, move |connection| {
+        let total = connection.query_row(
+            &format!("SELECT count(*) FROM {} WHERE {clause}", records.table),
+            params_from_iter(values.iter()),
+            |row| row.get(0),
+        )?;
+        let mut statement = connection.prepare(&format!(
+            "SELECT {} FROM {} WHERE {clause} ORDER BY at DESC, id DESC LIMIT {size} OFFSET {offset}",
+            records.columns.join(", "),
+            records.table
+        ))?;
+        let mut found = statement.query(params_from_iter(values.iter()))?;
+        let mut rows = Vec::new();
+        while let Some(row) = found.next()? {
+            let mut cells = Vec::new();
+            for index in 0..records.columns.len() {
+                cells.push(match row.get_ref(index)? {
+                    ValueRef::Null => Cell::Null,
+                    ValueRef::Integer(number) => Cell::Integer(number),
+                    ValueRef::Real(number) => Cell::Integer(number as i64),
+                    ValueRef::Text(text) => Cell::Text(String::from_utf8_lossy(text).into_owned()),
+                    // The only blobs are device ids.
+                    ValueRef::Blob(blob) => match <[u8; 16]>::try_from(blob) {
+                        Ok(bytes) => Cell::Text(Ulid(bytes).to_string()),
+                        Err(_) => Cell::Null,
+                    },
+                });
+            }
+            rows.push(cells);
+        }
+        Ok((total, rows))
+    })
+    .await;
+    match result {
+        Ok((total, rows)) => Json(SearchResponse {
+            columns: records.columns,
+            total,
+            rows,
+        })
+        .into_response(),
+        Err(error) => {
+            tracing::error!(msg = "Could not search", table = records.table, error = %format!("{error:#}"));
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct DeleteRequest {
+    /// These rows, at most the largest of `ADMIN_PAGE_SIZES`...
+    ids: Option<Vec<i64>>,
+    /// ...or every row this matches, however many. Exactly one of the two.
+    filter: Option<Filter>,
+}
+
+#[derive(Serialize)]
+struct DeleteResponse {
+    deleted: usize,
+}
+
+/// `POST /api/admin/{visits,clicks,messages}/delete`: the rows named, or all
+/// a filter matches, in one transaction. Deleting visits also deletes the
+/// devices left with none, which no longer count as visitors, and forgets
+/// them on clicks and messages.
+async fn delete(
+    app: Arc<App>,
+    headers: HeaderMap,
+    records: &'static Records,
+    body: DeleteRequest,
+) -> Response {
+    if signed_in(&app, &headers).is_none() {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let (clause, values) = match (body.ids, body.filter) {
+        (Some(ids), None)
+            if !ids.is_empty() && ids.len() <= ADMIN_PAGE_SIZES[ADMIN_PAGE_SIZES.len() - 1] =>
+        {
+            let mut marks = Vec::new();
+            let mut values = Vec::new();
+            for id in ids {
+                marks.push("?");
+                values.push(Value::Integer(id));
+            }
+            (format!("id IN ({})", marks.join(", ")), values)
+        }
+        (None, Some(filter)) => match conditions(records, &filter) {
+            Ok(found) => found,
+            Err(field) => {
+                return (StatusCode::BAD_REQUEST, Json(FieldError { error: field }))
+                    .into_response();
+            }
+        },
+        _ => return StatusCode::BAD_REQUEST.into_response(),
+    };
+    tracing::debug!(msg = "Deleting", table = records.table, clause = %clause);
+    let result = database(&app, move |connection| {
+        let transaction = connection.unchecked_transaction()?;
+        let deleted = transaction.execute(
+            &format!("DELETE FROM {} WHERE {clause}", records.table),
+            params_from_iter(values.iter()),
+        )?;
+        if records.table == "visit" {
+            transaction.execute_batch(
+                "UPDATE click SET device = NULL
+                 WHERE device IS NOT NULL AND device NOT IN (SELECT device FROM visit);
+                 UPDATE message SET device = NULL
+                 WHERE device IS NOT NULL AND device NOT IN (SELECT device FROM visit);
+                 DELETE FROM device WHERE id NOT IN (SELECT device FROM visit);",
+            )?;
+        }
+        transaction.commit()?;
+        Ok(deleted)
+    })
+    .await;
+    match result {
+        Ok(deleted) => {
+            tracing::info!(msg = "Deleted", table = records.table, deleted = deleted);
+            Json(DeleteResponse { deleted }).into_response()
+        }
+        Err(error) => {
+            tracing::error!(msg = "Could not delete", table = records.table, error = %format!("{error:#}"));
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct SeenRequest {
+    /// At most the largest of `ADMIN_PAGE_SIZES`.
+    ids: Vec<i64>,
+    /// Read (`true`: now, unless already read) or unread (`false`).
+    seen: bool,
+}
+
+/// `POST /api/admin/messages/seen`: marks messages read or unread, `204`.
+async fn seen(
+    State(app): State<Arc<App>>,
+    headers: HeaderMap,
+    Json(body): Json<SeenRequest>,
+) -> Response {
+    if signed_in(&app, &headers).is_none() {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    if body.ids.is_empty() || body.ids.len() > ADMIN_PAGE_SIZES[ADMIN_PAGE_SIZES.len() - 1] {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    let mut marks = Vec::new();
+    let mut values = Vec::new();
+    if body.seen {
+        values.push(Value::Integer(now()));
+    }
+    for id in body.ids {
+        marks.push("?");
+        values.push(Value::Integer(id));
+    }
+    let sql = if body.seen {
+        format!(
+            "UPDATE message SET seen = ? WHERE seen IS NULL AND id IN ({})",
+            marks.join(", ")
+        )
+    } else {
+        format!(
+            "UPDATE message SET seen = NULL WHERE id IN ({})",
+            marks.join(", ")
+        )
+    };
+    let result = database(&app, move |connection| {
+        connection.execute(&sql, params_from_iter(values.iter()))
+    })
+    .await;
+    match result {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(error) => {
+            tracing::error!(msg = "Could not mark messages", error = %format!("{error:#}"));
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }
