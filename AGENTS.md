@@ -52,7 +52,7 @@ result; do not claim it passed without running it.
 src/main.rs     The whole backend: settings consts, CLI, schema, routes, handlers
 www/            The front end, served as-is from --www
   index.html    Template for / and /index.html; {{name}} filled by the server.
-                Name, tagline, and the three ways on: software, thoughts
+                Name, tagline, and the three ways on: software, fragments
                 (plogia.ir, new tab, ?l= in the page's language) and contact.
                 English and Persian
   software.html Template for /software: open-source contributions and projects.
