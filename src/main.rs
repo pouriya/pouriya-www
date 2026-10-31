@@ -531,6 +531,35 @@ async fn main() -> anyhow::Result<()> {
                 }
             }),
         )
+        // Whether any message is unread, for the login button, so no session:
+        // only under the secret path, and yes or no, never how many.
+        .route(
+            &format!("{admin_path}/unread"),
+            get(|State(app): State<Arc<App>>| async move {
+                #[derive(Serialize)]
+                struct Unread {
+                    unread: bool,
+                }
+                let unread = database(&app, |connection| {
+                    connection.query_row(
+                        "SELECT EXISTS (SELECT 1 FROM message WHERE seen IS NULL)",
+                        [],
+                        |row| row.get(0),
+                    )
+                })
+                .await;
+                match unread {
+                    Ok(unread) => {
+                        ([(header::CACHE_CONTROL, "no-store")], Json(Unread { unread }))
+                            .into_response()
+                    }
+                    Err(error) => {
+                        tracing::error!(msg = "Could not read unread messages", error = %format!("{error:#}"));
+                        StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                    }
+                }
+            }),
+        )
         .route("/go", get(go))
         .route("/api/visit", post(visit))
         .route("/api/captcha", get(captcha))

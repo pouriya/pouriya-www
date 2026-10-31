@@ -584,6 +584,15 @@ input[type="checkbox"] { margin: 0; accent-color: var(--fg); cursor: pointer; }
     document.getElementById("login-password").value = "";
     newCaptcha();
     document.getElementById("login-password").focus();
+    // Asked each time the login shows, since it also shows without a reload,
+    // after a logout or when the session ends.
+    fetch(location.pathname + "/unread").then(function (response) {
+      return response.status === 200 ? response.json() : null;
+    }).then(function (body) {
+      if (body) {
+        document.getElementById("login-submit").textContent = body.unread ? "Log in!" : "Log in";
+      }
+    }).catch(function () {});
   }
 
   document.getElementById("login-refresh").addEventListener("click", newCaptcha);

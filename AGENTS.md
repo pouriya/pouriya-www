@@ -155,6 +155,7 @@ is English only.
 | `POST /api/email` | `{captcha, answer}` → `{email}`, or `400 {error: "captcha"}` |
 | `POST /api/message` | `{name, text, contact_kind, contact, language, device?, captcha, answer}` → `204`, or `400 {error}` naming `name`, `text`, `contact` or `captcha` |
 | `GET <--admin-path>` | `www/admin.html` as-is |
+| `GET <--admin-path>/unread` | `{unread}`, whether any message is unread, no session needed |
 | `POST /api/admin/login` | `{password, captcha, answer}` → `204` + session cookie, or `400 {error}` naming `captcha` or `password` |
 | `POST /api/admin/logout` | Ends the session → `204` |
 | `POST /api/admin/overview` | `{from?, offset}` → totals, per-day counts, top paths, referrers and links |
@@ -249,6 +250,9 @@ robot  (day, kind, dropped, PRIMARY KEY (day, kind))  -- refused robots, per UTC
 - **Login** is the password and a captcha (the same `/api/captcha`), checked
   captcha first so every password tried costs one. A success logs `Admin
   logged in`, a wrong password `Refused admin login` (`warn`), both with `ip`.
+  The button says `Log in!` while any message is unread, asked of
+  `<--admin-path>/unread` each time the login shows. So whoever has the path
+  learns that one bit, without the password; never the count.
 - **Sessions** are random 256-bit tokens held in memory, in an `HttpOnly;
   Secure; SameSite=Strict` cookie scoped to `/api/admin`. Each ends after
   `ADMIN_SESSION_IDLE` without a request, at logout, or on restart. Every
